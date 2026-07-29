@@ -117,7 +117,7 @@ class RetrievalDB:
         """打开/创建数据库并初始化表结构，支持链式调用"""
         if self.db_path != ":memory:":
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path)
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.execute("PRAGMA foreign_keys=ON;")
         self._conn.execute(SCHEMA_DOCUMENTS)

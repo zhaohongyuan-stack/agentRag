@@ -187,7 +187,7 @@ def load_json_chunks(source: Union[str, Path]) -> List[Chunk]:
     chunks: List[Chunk] = []
 
     if source_path.is_dir():
-        files = sorted(source_path.rglob("*.jsonl")) + sorted(source_path.rglob("*.json"))
+        files = sorted(source_path.rglob("*_chunks.jsonl")) + sorted(source_path.rglob("*_chunks.json"))
         # 排除隐藏目录（如 .cache），避免加载导出/缓存文件
         files = [f for f in files if not any(p.startswith('.') for p in f.parts)]
         for fpath in files:

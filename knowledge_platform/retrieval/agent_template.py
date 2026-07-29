@@ -2,19 +2,34 @@
 检索调用示例
 """
 
-from retrieval_service import Retriever
+import json
+from retrieval_service import Retriever, RetrievalAPI
 
-# 1. 加载数据（启动时一次）
+# 加载数据（启动时一次）
+api = RetrievalAPI()
+api.load("regulatory_docs/")
 r = Retriever("regulatory_docs/").load()
 
-# 2. 检索 — 选一个通道，改 strategy 即可
-results = r.search("核心一级资本合格标准", top_k=5)
-# results = r.search("不良贷款率", strategy="bm25", top_k=10)      # BM25 关键词
-# results = r.search("银行业总资产", strategy="dense", top_k=5)    # 语义向量
-# results = r.search("第十二条", strategy="exact", exact_mode="exact")  # 精确匹配
-# results = r.search("KM1", strategy="table", filters={"table_name": "KM1"})  # 表格
-# results = r.search("", strategy="metadata", filters={"chunk_type": "clause"})  # 元数据过滤
+# ── 接口一：统一 Retrieval API → 返回 RetrievalHit ──
+hits = r.search("核心一级资本合格标准", top_k=5, lightweight=False)
 
-# 3. 每条结果是 dict，字段: chunk_id, content, score, doc_name 等
-for h in results:
-    print(h["doc_name"], h["score"])
+for h in hits:
+    print(json.dumps(h, ensure_ascii=False))
+
+# ── 接口二：文档与 chunk 查询 API → 返回 JSON ──
+# 查 chunk
+chunk = api.get_chunk("001_s1_summary")
+print(json.dumps(chunk, ensure_ascii=False))
+
+# 查文档
+doc = api.get_document("001")
+print(json.dumps(doc, ensure_ascii=False))
+
+# 列出文档（只展示前 3 个）
+for d in api.list_documents()[:3]:
+    print(json.dumps(d, ensure_ascii=False))
+
+# 多字段组合查 chunk
+results = api.search_chunks(doc_id="001", chunk_type="sheet_summary", limit=5)
+for c in results:
+    print(json.dumps(c, ensure_ascii=False))

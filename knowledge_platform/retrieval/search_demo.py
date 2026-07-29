@@ -32,6 +32,7 @@ RetrievalRequest 支持的全部字段：
   :defaults    查看当前默认值
 """
 
+import json
 import shlex
 from retrieval_service import (
     RetrievalAPI, RetrievalRequest, RetrievalStrategy, RerankMode
@@ -219,6 +220,7 @@ def main():
     print_help()
 
     verbose = False
+    json_mode = False
     tool_mode = False
 
     while True:
@@ -244,6 +246,13 @@ def main():
         if line == ":verbose":
             verbose = not verbose
             print(f"  verbose = {verbose}")
+            continue
+        if line == ":json":
+            # 把上一次同样的查询用 JSON 格式输出
+            print("  请在下一条查询前输入 :json，查询结果将以 JSON 格式输出")
+            print("  再次输入 :json 切回可读模式")
+            json_mode = not json_mode
+            print(f"  json_mode = {json_mode}")
             continue
         if line == ":tool":
             tool_mode = not tool_mode
@@ -294,6 +303,9 @@ def main():
                 filters=req.filters,
             )
             print(to_llm_text(tool_hits))
+        elif json_mode:
+            # ── JSON 输出 ──
+            print(json.dumps([h.to_dict() for h in hits], ensure_ascii=False, indent=2))
         else:
             print_results(hits, verbose)
 

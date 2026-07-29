@@ -3,7 +3,7 @@
 > 启动方式：`python -m retrieval_service.server`  
 > 默认地址：`http://127.0.0.1:8000`  
 > 交互式文档：启动后访问 [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-
+> retrieval/regulatory_docs下存json文件
 ---
 
 ## 接口一：POST `/api/v1/search`

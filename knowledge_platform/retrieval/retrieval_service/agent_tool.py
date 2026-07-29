@@ -392,6 +392,19 @@ class Retriever:
         self._api.load(self._data_dir)
         return self
 
+    def _to_lightweight(self, hit: RetrievalHit) -> Dict[str, Any]:
+        """RetrievalHit → 精简 dict（只有关键字段）"""
+        return {
+            "rank":        hit.rank,
+            "chunk_id":    hit.chunk_id,
+            "chunk_type":  hit.chunk_type,
+            "doc_name":    hit.doc_name or hit.source_file,
+            "content":     hit.content[:300],
+            "citation":    hit.citation,
+            "score":       hit.score,
+            "matched_by":  hit.matched_by,
+        }
+
     def search(self,
                query: str,
                *,
@@ -402,6 +415,7 @@ class Retriever:
                bm25_k: int = 20,
                vector_k: int = 20,
                expand_context: bool = False,
+               lightweight: bool = True,
                ) -> List[Dict[str, Any]]:
         """
         统一检索入口 — strategy 切换通道，字符串即可。
@@ -415,9 +429,15 @@ class Retriever:
             bm25_k:   hybrid 时 BM25 粗排候选数
             vector_k: hybrid 时向量粗排候选数
             expand_context: 是否扩展邻域上下文
+            lightweight: True=只返回关键字段，False=返回全部字段
 
         返回:
-            List[dict]: 每条含 chunk_id, content, score, doc_name, evidence_snippet ...
+            lightweight=True  → [{rank, chunk_id, chunk_type, doc_name,
+                                   content(截断300字), citation, score, matched_by}, ...]
+            lightweight=False → [{chunk_id, chunk_type, doc_id, doc_name, ...,
+                                  content, content_raw, evidence_snippet,
+                                  score, scores_detail, rank, matched_by,
+                                  trace, context, metadata}, ...]
         """
         if self._api is None:
             raise RuntimeError("请先调用 .load() 加载数据")
@@ -436,6 +456,9 @@ class Retriever:
             expand_context=expand_context,
         )
         hits = self._api.search_request(req)
+
+        if lightweight:
+            return [self._to_lightweight(h) for h in hits]
         return [h.to_dict() for h in hits]
 
     # ── 便捷属性：直接访问底层检索器和 API ──

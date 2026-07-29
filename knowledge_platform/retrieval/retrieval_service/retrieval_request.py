@@ -355,6 +355,7 @@ class RetrievalHit:
             "hierarchy_path": self.hierarchy_path,
             "source":         self.source_file,
             # content
+            "citation":         self.citation,
             "content":          self.content,
             "content_raw":      self.content_raw,
             "evidence_snippet": self.evidence_snippet,

@@ -1,0 +1,64 @@
+# 执行路径配置 — P0-P4
+# 综合 意图+复杂度+风险 → 执行路径
+# 来源: M2.2 开发计划 + 问题确认.md 用户确认
+
+execution_paths:
+  P0:
+    description: "高置信度重复问题"
+    cache_first: true
+    retrieval: false
+    channels: []
+    top_k: 0
+    rerank: false
+    rerank_top_n: 0
+    budget_ms: 100
+    max_retries: 0
+    need_decomposition: false
+
+  P1:
+    description: "精确字段明确"
+    cache_first: false
+    retrieval: true
+    channels: ["exact", "metadata"]
+    top_k: 5
+    rerank: false
+    rerank_top_n: 0
+    budget_ms: 2000
+    max_retries: 1
+    need_decomposition: false
+
+  P2:
+    description: "普通事实查询"
+    cache_first: false
+    retrieval: true
+    channels: ["lexical", "dense", "metadata"]
+    top_k: 20
+    rerank: true
+    rerank_top_n: 8
+    budget_ms: 5000
+    max_retries: 1
+    need_decomposition: false
+
+  P3:
+    description: "多路检索"
+    cache_first: false
+    retrieval: true
+    channels: ["lexical", "dense", "metadata", "table"]
+    top_k: 30
+    rerank: true
+    rerank_top_n: 10
+    budget_ms: 8000
+    max_retries: 2
+    need_decomposition: false
+
+  P4:
+    description: "复杂分析（合规判断/多跳比较）"
+    cache_first: false
+    retrieval: true
+    channels: ["lexical", "dense", "metadata", "table", "relation", "neighborhood"]
+    top_k: 50
+    rerank: true
+    rerank_top_n: 15
+    budget_ms: 15000
+    max_retries: 3
+    need_decomposition: true

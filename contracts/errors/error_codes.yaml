@@ -1,0 +1,174 @@
+# 错误码规范草案 — B组起草，供A组确认
+# 来源: 问题确认.md Q0.5
+# 创建时间: 2026-07-29
+# 命名规则: {域}_{场景}_{类型}，域前缀 AG=Agent, RT=Retrieval, EV=Evidence, GE=Generation
+
+error_codes:
+  # ═══════════════════════════════════════════════
+  # 检索类错误 (RT)
+  # ═══════════════════════════════════════════════
+  RT_TIMEOUT:
+    code: "RT_TIMEOUT"
+    http_status: 504
+    severity: "warn"
+    message: "检索超时"
+    description: "检索请求超过预算时间，B组主动放弃等待"
+    retryable: true
+    max_retries: 2
+
+  RT_EMPTY_RESULT:
+    code: "RT_EMPTY_RESULT"
+    http_status: 200
+    severity: "info"
+    message: "检索结果为空"
+    description: "检索请求返回空结果，可能需要改写查询或放宽过滤条件"
+    retryable: true
+    max_retries: 2
+
+  RT_PARTIAL_FAILURE:
+    code: "RT_PARTIAL_FAILURE"
+    http_status: 200
+    severity: "warn"
+    message: "部分检索通道失败"
+    description: "多通道检索中部分通道失败，返回部分结果"
+    retryable: false
+
+  RT_CONNECTION_ERROR:
+    code: "RT_CONNECTION_ERROR"
+    http_status: 502
+    severity: "error"
+    message: "检索服务连接失败"
+    description: "无法连接到A组检索服务"
+    retryable: true
+    max_retries: 3
+
+  RT_INVALID_REQUEST:
+    code: "RT_INVALID_REQUEST"
+    http_status: 400
+    severity: "error"
+    message: "检索请求参数无效"
+    description: "RetrievalRequest 参数校验失败"
+    retryable: false
+
+  # ═══════════════════════════════════════════════
+  # 证据类错误 (EV)
+  # ═══════════════════════════════════════════════
+  EV_INSUFFICIENT:
+    code: "EV_INSUFFICIENT"
+    http_status: 200
+    severity: "warn"
+    message: "证据不足"
+    description: "证据充分性评分低于阈值(0.85)，且已达最大重试次数"
+    retryable: false
+    action: "refuse"
+
+  EV_CONFLICT:
+    code: "EV_CONFLICT"
+    http_status: 200
+    severity: "warn"
+    message: "证据冲突"
+    description: "检测到证据冲突，无法自动解决"
+    retryable: false
+    action: "parallel_display"
+
+  EV_VERSION_CONFLICT:
+    code: "EV_VERSION_CONFLICT"
+    http_status: 200
+    severity: "warn"
+    message: "版本冲突"
+    description: "同一法规存在多个版本，需判断现行有效版本"
+    retryable: false
+
+  # ═══════════════════════════════════════════════
+  # Agent 状态机错误 (AG)
+  # ═══════════════════════════════════════════════
+  AG_ILLEGAL_TRANSITION:
+    code: "AG_ILLEGAL_TRANSITION"
+    http_status: 500
+    severity: "error"
+    message: "非法状态迁移"
+    description: "状态机尝试了不合法的状态迁移"
+    retryable: false
+
+  AG_BUDGET_EXHAUSTED:
+    code: "AG_BUDGET_EXHAUSTED"
+    http_status: 200
+    severity: "warn"
+    message: "预算耗尽"
+    description: "检索轮次或时间预算已用完"
+    retryable: false
+    action: "refuse"
+
+  AG_SESSION_EXPIRED:
+    code: "AG_SESSION_EXPIRED"
+    http_status: 401
+    severity: "warn"
+    message: "会话已过期"
+    description: "会话超过30分钟无操作"
+    retryable: false
+
+  AG_SESSION_FULL:
+    code: "AG_SESSION_FULL"
+    http_status: 429
+    severity: "warn"
+    message: "会话轮次已满"
+    description: "会话已达到最大轮次限制(20轮)"
+    retryable: false
+
+  AG_CHECKPOINT_RESTORE_FAILED:
+    code: "AG_CHECKPOINT_RESTORE_FAILED"
+    http_status: 500
+    severity: "error"
+    message: "检查点恢复失败"
+    description: "从Redis恢复检查点失败，无法继续执行"
+    retryable: false
+
+  # ═══════════════════════════════════════════════
+  # 生成类错误 (GE)
+  # ═══════════════════════════════════════════════
+  GE_MODEL_ERROR:
+    code: "GE_MODEL_ERROR"
+    http_status: 502
+    severity: "error"
+    message: "LLM 调用失败"
+    description: "生成模型返回错误或超时"
+    retryable: true
+    max_retries: 2
+
+  GE_VALIDATION_FAILED:
+    code: "GE_VALIDATION_FAILED"
+    http_status: 200
+    severity: "warn"
+    message: "回答验证失败"
+    description: "生成的回答未通过数值/版本/引用验证"
+    retryable: true
+    max_retries: 1
+
+  # ═══════════════════════════════════════════════
+  # 系统类错误 (SYS)
+  # ═══════════════════════════════════════════════
+  SYS_INTERNAL_ERROR:
+    code: "SYS_INTERNAL_ERROR"
+    http_status: 500
+    severity: "error"
+    message: "内部错误"
+    description: "未预期的内部错误"
+    retryable: false
+
+  SYS_REDIS_ERROR:
+    code: "SYS_REDIS_ERROR"
+    http_status: 503
+    severity: "error"
+    message: "Redis 连接错误"
+    description: "无法连接到 Redis 或操作失败"
+    retryable: true
+    max_retries: 3
+
+# 错误响应格式
+error_response_format:
+  error_code: "string"
+  error_message: "string"
+  error_details: "object"
+  request_id: "string"
+  timestamp: "string (ISO 8601)"
+  retryable: "boolean"

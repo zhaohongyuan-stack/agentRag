@@ -1,0 +1,89 @@
+# 静态预算配置 — 第一版固定预算表
+# 来源: 问题确认.md Q4.4 用户确认
+# 第二版再根据日志统计数据做动态调整
+
+budget_config:
+  # L0: 问候/打招呼 — 直接回复，无需检索
+  L0:
+    total_timeout_ms: 1000
+    max_retrieval_rounds: 0
+    max_rewrite_count: 0
+    max_subtasks: 0
+    max_tool_calls: 0
+    sufficiency_threshold: 0.0
+    description: "问候/打招呼，直接回复"
+
+  # L1: 条款查询 — 包含精确文号/条款号
+  L1:
+    total_timeout_ms: 2000
+    max_retrieval_rounds: 1
+    max_rewrite_count: 0
+    max_subtasks: 1
+    max_tool_calls: 1
+    sufficiency_threshold: 0.85
+    channels: ["exact", "metadata"]
+    top_k: 5
+    rerank: false
+    description: "条款查询，精确文号/条款号"
+
+  # L2: 定义/阈值查询 — 普通事实查询
+  L2:
+    total_timeout_ms: 5000
+    max_retrieval_rounds: 2
+    max_rewrite_count: 1
+    max_subtasks: 1
+    max_tool_calls: 2
+    sufficiency_threshold: 0.85
+    channels: ["lexical", "dense", "metadata"]
+    top_k: 20
+    rerank: true
+    rerank_top_n: 8
+    description: "定义/阈值查询，普通事实查询"
+
+  # L3: 比较/表格查询 — 包含比较词
+  L3:
+    total_timeout_ms: 15000
+    max_retrieval_rounds: 3
+    max_rewrite_count: 1
+    max_subtasks: 3
+    max_tool_calls: 3
+    sufficiency_threshold: 0.85
+    channels: ["hybrid", "table", "metadata"]
+    top_k: 20
+    rerank: true
+    rerank_top_n: 10
+    description: "比较/表格查询，包含比较词"
+
+  # L4: 合规/复杂查询 — 包含"是否合规"、"计算"等
+  L4:
+    total_timeout_ms: 30000
+    max_retrieval_rounds: 5
+    max_rewrite_count: 2
+    max_subtasks: 5
+    max_tool_calls: 5
+    sufficiency_threshold: 0.85
+    channels: ["hybrid", "exact", "table", "neighborhood", "relation"]
+    top_k: 30
+    rerank: true
+    rerank_top_n: 10
+    description: "合规/复杂查询，多跳推理"
+
+# 二次检索配置
+secondary_retrieval:
+  trigger_threshold: 0.85
+  max_retries: 2
+  strategy:
+    first_retry: "放宽过滤条件（如去掉时间限制）"
+    second_retry: "扩展同义词，降低 top_k 要求"
+    final: "直接拒答"
+
+# 计划缓存配置
+plan_cache:
+  invalidation_strategy: "full"  # 知识库版本变化时全量失效
+  target_hit_rate: 0.30
+  ttl_seconds: 3600
+
+# 幂等配置
+idempotency:
+  key_ttl_seconds: 300  # 幂等键有效期5分钟
+  cache_hit_returns_cached: true

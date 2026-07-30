@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tool_manifest.schema.json",
+  "title": "ToolManifest",
+  "description": "工具清单 — 工具名称、Schema、权限、超时、重试策略",
+  "type": "object",
+  "required": ["tool_name", "schema", "timeout_ms", "max_retries"],
+  "properties": {
+    "tool_name": { "type": "string", "description": "工具名称" },
+    "description": { "type": "string" },
+    "schema": {
+      "type": "object",
+      "description": "OpenAI/Claude function-calling JSON Schema",
+      "required": ["type", "function"],
+      "properties": {
+        "type": { "type": "string", "enum": ["function"] },
+        "function": {
+          "type": "object",
+          "required": ["name", "parameters"],
+          "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" },
+            "parameters": { "type": "object" }
+          }
+        }
+      }
+    },
+    "timeout_ms": { "type": "integer", "default": 5000 },
+    "max_retries": { "type": "integer", "default": 2 },
+    "retry_backoff_ms": { "type": "integer", "default": 500 },
+    "permissions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "所需权限列表"
+    },
+    "rate_limit": {
+      "type": "object",
+      "properties": {
+        "max_calls_per_minute": { "type": "integer" },
+        "max_concurrent": { "type": "integer" }
+      }
+    },
+    "fallback_tool": { "type": "string", "description": "失败时的备用工具" },
+    "enabled": { "type": "boolean", "default": true }
+  }
+}

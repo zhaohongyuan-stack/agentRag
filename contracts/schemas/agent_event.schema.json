@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agent_event.schema.json",
+  "title": "AgentEvent",
+  "description": "Agent事件 — 状态迁移事件、工具调用事件等，用于执行日志和可追溯",
+  "type": "object",
+  "required": ["event_id", "event_type", "timestamp", "session_id"],
+  "properties": {
+    "event_id": { "type": "string", "description": "事件唯一标识" },
+    "event_type": {
+      "type": "string",
+      "enum": ["state_transition", "tool_call", "retrieval_request", "retrieval_response", "evidence_update", "budget_update", "error", "checkpoint", "clarification"]
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "session_id": { "type": "string" },
+    "query_id": { "type": "string" },
+    "task_id": { "type": "string", "description": "关联的DAG任务ID" },
+    "from_state": { "type": "string", "description": "状态迁移前" },
+    "to_state": { "type": "string", "description": "状态迁移后" },
+    "metadata": { "type": "object", "description": "事件附加数据" },
+    "duration_ms": { "type": "integer", "description": "耗时（毫秒）" },
+    "error_code": { "type": "string", "description": "错误事件时的错误码" },
+    "error_message": { "type": "string" }
+  }
+}

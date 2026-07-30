@@ -1,0 +1,176 @@
+[
+  {
+    "chunk_id": "001_s1_cell_B7",
+    "chunk_type": "cell_fact",
+    "doc_id": "doc-001",
+    "doc_name": "银行业金融机构资产负债统计表",
+    "doc_title": "银行业金融机构资产负债统计表（2026年1月）",
+    "hierarchy_path": "银行业金融机构资产负债统计表 > 2026年1月 > 1. 银行业金融机构 > 总资产",
+    "source": "银行业金融机构资产负债统计表_2026_01.xlsx",
+    "citation": "《银行业金融机构资产负债统计表》2026年1月 — 1. 银行业金融机构 总资产",
+    "content": "2026年1月，银行业金融机构总资产为4806061.6912亿元。",
+    "content_raw": "总资产 | 2026年_1月 | 4806061.6912",
+    "evidence_snippet": "2026年1月，银行业金融机构总资产为4806061.6912亿元。",
+    "score": 0.978,
+    "scores_detail": {
+      "bm25": 18.92,
+      "dense": 0.91,
+      "rrf": 0.041,
+      "exact": 1.0
+    },
+    "rank": 1,
+    "matched_by": ["exact", "bm25", "dense"],
+    "trace": {
+      "request_id": "req-table-001",
+      "strategy": "table",
+      "rerank": "none",
+      "timestamp": 1769712121.0,
+      "bm25_rank": 1,
+      "bm25_score": 18.92,
+      "dense_rank": 1,
+      "dense_score": 0.91,
+      "rrf_score": 0.041,
+      "rerank_score": null,
+      "filters_applied": {
+        "chunk_type": "cell_fact",
+        "table_name": "1. 银行业金融机构"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "001_s1_row7",
+        "chunk_type": "table_row",
+        "content": "总资产 | 4806061.6912 | 4700001.2345"
+      },
+      "children": [],
+      "siblings": [
+        {
+          "chunk_id": "001_s1_cell_B8",
+          "chunk_type": "cell_fact",
+          "content": "总负债 | 2026年_1月 | 4419232.1587亿元"
+        }
+      ],
+      "prev": {
+        "chunk_id": "001_s1_cell_B6",
+        "chunk_type": "cell_fact",
+        "content": "国外资产 | 2026年_1月 | 56789.12亿元"
+      },
+      "next": {
+        "chunk_id": "001_s1_cell_B8",
+        "chunk_type": "cell_fact",
+        "content": "总负债 | 2026年_1月 | 4419232.1587亿元"
+      }
+    },
+    "metadata": {
+      "parser_type": "excel_cell",
+      "parser_version": "2.1.0",
+      "parse_timestamp": "2026-02-05T09:00:00Z",
+      "source_url": "https://www.pbc.gov.cn/...",
+      "sha256": "f8c0b4d6a2e7...",
+      "attachment_no": "统计表",
+      "applicable_scope": "银行业金融机构",
+      "normative_level": "neutral",
+      "table_name": "1. 银行业金融机构",
+      "table_full_name": "1. 银行业金融机构资产负债统计表",
+      "table_section_name": "总资产",
+      "sheet_name": "Sheet1",
+      "row_count": 25,
+      "col_count": 8,
+      "merge_info": [
+        {"range": "A1:A2", "type": "vertical"},
+        {"range": "B1:E1", "type": "horizontal"}
+      ],
+      "row_label": "总资产",
+      "column_label": "2026年_1月",
+      "value": "4806061.6912",
+      "unit": "亿元",
+      "row_index": 7,
+      "col_index": 2,
+      "cell_ref": "B7",
+      "keywords": ["总资产", "2026年1月", "银行业", "4806061.6912"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "001_s1_cell_B8",
+    "chunk_type": "cell_fact",
+    "doc_id": "doc-001",
+    "doc_name": "银行业金融机构资产负债统计表",
+    "doc_title": "银行业金融机构资产负债统计表（2026年1月）",
+    "hierarchy_path": "银行业金融机构资产负债统计表 > 2026年1月 > 1. 银行业金融机构 > 总负债",
+    "source": "银行业金融机构资产负债统计表_2026_01.xlsx",
+    "citation": "《银行业金融机构资产负债统计表》2026年1月 — 1. 银行业金融机构 总负债",
+    "content": "2026年1月，银行业金融机构总负债为4419232.1587亿元。",
+    "content_raw": "总负债 | 2026年_1月 | 4419232.1587",
+    "evidence_snippet": "2026年1月，银行业金融机构总负债为4419232.1587亿元。",
+    "score": 0.852,
+    "scores_detail": {
+      "bm25": 12.34,
+      "dense": 0.78,
+      "rrf": 0.026,
+      "exact": 0.85
+    },
+    "rank": 2,
+    "matched_by": ["exact", "bm25"],
+    "trace": {
+      "request_id": "req-table-001",
+      "strategy": "table",
+      "rerank": "none",
+      "timestamp": 1769712121.0,
+      "bm25_rank": 2,
+      "bm25_score": 12.34,
+      "dense_rank": 3,
+      "dense_score": 0.78,
+      "rrf_score": 0.026,
+      "rerank_score": null,
+      "filters_applied": {
+        "chunk_type": "cell_fact",
+        "table_name": "1. 银行业金融机构"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "001_s1_row8",
+        "chunk_type": "table_row",
+        "content": "总负债 | 4419232.1587 | 4320000.5678"
+      },
+      "children": [],
+      "siblings": [],
+      "prev": {
+        "chunk_id": "001_s1_cell_B7",
+        "chunk_type": "cell_fact",
+        "content": "总资产 | 2026年_1月 | 4806061.6912亿元"
+      },
+      "next": {
+        "chunk_id": "001_s1_cell_B9",
+        "chunk_type": "cell_fact",
+        "content": "对非金融机构及住户负债 | 2026年_1月 | 3210000.1234亿元"
+      }
+    },
+    "metadata": {
+      "parser_type": "excel_cell",
+      "parser_version": "2.1.0",
+      "parse_timestamp": "2026-02-05T09:00:00Z",
+      "source_url": "https://www.pbc.gov.cn/...",
+      "sha256": "a9d1c5e7b3f8...",
+      "attachment_no": "统计表",
+      "applicable_scope": "银行业金融机构",
+      "normative_level": "neutral",
+      "table_name": "1. 银行业金融机构",
+      "table_full_name": "1. 银行业金融机构资产负债统计表",
+      "table_section_name": "总负债",
+      "sheet_name": "Sheet1",
+      "row_label": "总负债",
+      "column_label": "2026年_1月",
+      "value": "4419232.1587",
+      "unit": "亿元",
+      "row_index": 8,
+      "col_index": 2,
+      "cell_ref": "B8",
+      "keywords": ["总负债", "2026年1月", "银行业", "4419232.1587"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  }
+]

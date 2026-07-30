@@ -1,0 +1,8 @@
+{
+  "error": "RT_TIMEOUT",
+  "message": "检索超时",
+  "request_id": "req-timeout-001",
+  "elapsed_ms": 30000,
+  "timeout_threshold_ms": 30000,
+  "partial_results": false
+}

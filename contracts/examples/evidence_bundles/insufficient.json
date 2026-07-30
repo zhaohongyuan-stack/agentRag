@@ -1,0 +1,82 @@
+{
+  "bundle_id": "eb-002",
+  "query_id": "q-002",
+  "claim_slots": [
+    {
+      "claim_id": "claim-1",
+      "description": "适用主体：系统重要性银行",
+      "slot_type": "subject",
+      "status": "supported",
+      "evidence_ids": ["ev-1"]
+    },
+    {
+      "claim_id": "claim-2",
+      "description": "指标名称：附加资本要求",
+      "slot_type": "metric",
+      "status": "supported",
+      "evidence_ids": ["ev-1"]
+    },
+    {
+      "claim_id": "claim-3",
+      "description": "阈值数值",
+      "slot_type": "value",
+      "status": "missing",
+      "evidence_ids": []
+    },
+    {
+      "claim_id": "claim-4",
+      "description": "生效时间",
+      "slot_type": "effective_date",
+      "status": "missing",
+      "evidence_ids": []
+    },
+    {
+      "claim_id": "claim-5",
+      "description": "例外要求",
+      "slot_type": "exception",
+      "status": "missing",
+      "evidence_ids": []
+    },
+    {
+      "claim_id": "claim-6",
+      "description": "法规依据",
+      "slot_type": "legal_basis",
+      "status": "supported",
+      "evidence_ids": ["ev-1"]
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-1",
+      "chunk_id": "400_c45",
+      "source": "《商业银行资本管理办法》第四十五条",
+      "content": "第四十五条 系统重要性银行应当计提附加资本，国内系统重要性银行附加资本要求由中国人民银行、国家金融监督管理总局确定。",
+      "score": 0.834,
+      "authority_level": "regulation",
+      "version_status": "active",
+      "matched_claims": ["claim-1", "claim-2", "claim-6"]
+    }
+  ],
+  "sufficiency": {
+    "score": 0.58,
+    "threshold": 0.85,
+    "is_sufficient": false,
+    "components": {
+      "claim_coverage": 0.5,
+      "source_authority": 0.95,
+      "version_validity": 1.0,
+      "condition_completeness": 0.4,
+      "cross_channel_consistency": 0.6,
+      "conflict_penalty": 0.0,
+      "missing_condition_penalty": 0.25
+    }
+  },
+  "conflicts": [],
+  "missing_conditions": [
+    "附加资本要求的具体阈值数值（1%至3.5%）未在检索结果中命中",
+    "各分组系统重要性银行附加资本要求的生效时间缺失",
+    "例外情形或过渡期安排未检索到"
+  ],
+  "retrieval_rounds": 2,
+  "created_at": "2026-01-29T10:15:00Z"
+}

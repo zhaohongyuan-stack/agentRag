@@ -1,0 +1,125 @@
+# agent_states — Agent 状态机枚举
+# 来源: 架构设计.md 状态机定义
+
+agent_states:
+  RECEIVED:
+    value: "RECEIVED"
+    label: "已接收"
+    description: "请求已到达，尚未处理"
+    is_terminal: false
+
+  NORMALIZED:
+    value: "NORMALIZED"
+    label: "已标准化"
+    description: "请求格式已校验和标准化"
+    is_terminal: false
+
+  CONTEXT_RESOLVED:
+    value: "CONTEXT_RESOLVED"
+    label: "上下文已解析"
+    description: "多轮上下文和指代已消解"
+    is_terminal: false
+
+  ANALYZED:
+    value: "ANALYZED"
+    label: "已分析"
+    description: "意图识别、实体抽取、复杂度评级完成"
+    is_terminal: false
+
+  ROUTED:
+    value: "ROUTED"
+    label: "已路由"
+    description: "路由决策完成，确定执行路径"
+    is_terminal: false
+
+  CLARIFYING:
+    value: "CLARIFYING"
+    label: "澄清中"
+    description: "向用户发起澄清请求"
+    is_terminal: false
+
+  PLANNING:
+    value: "PLANNING"
+    label: "规划中"
+    description: "Query Compiler 正在生成执行计划"
+    is_terminal: false
+
+  RETRIEVING:
+    value: "RETRIEVING"
+    label: "检索中"
+    description: "正在执行检索任务"
+    is_terminal: false
+
+  TOOL_CALLING:
+    value: "TOOL_CALLING"
+    label: "工具调用中"
+    description: "正在调用外部工具"
+    is_terminal: false
+
+  EVIDENCE_ASSEMBLING:
+    value: "EVIDENCE_ASSEMBLING"
+    label: "证据组装中"
+    description: "将 RetrievalHit 转换为 Evidence Bundle"
+    is_terminal: false
+
+  EVIDENCE_VALIDATING:
+    value: "EVIDENCE_VALIDATING"
+    label: "证据验证中"
+    description: "验证证据充分性、冲突检测"
+    is_terminal: false
+
+  GENERATING:
+    value: "GENERATING"
+    label: "生成中"
+    description: "基于证据生成回答"
+    is_terminal: false
+
+  ANSWER_VALIDATING:
+    value: "ANSWER_VALIDATING"
+    label: "回答验证中"
+    description: "验证回答的数值/版本/引用准确性"
+    is_terminal: false
+
+  RESPONDING:
+    value: "RESPONDING"
+    label: "回复中"
+    description: "正在向用户返回结果"
+    is_terminal: false
+
+  RETRYING:
+    value: "RETRYING"
+    label: "重试中"
+    description: "重新执行检索或生成"
+    is_terminal: false
+
+  REFUSING:
+    value: "REFUSING"
+    label: "拒答中"
+    description: "证据不足或风险过高，准备拒答"
+    is_terminal: false
+
+  FAILED:
+    value: "FAILED"
+    label: "失败"
+    description: "处理失败，终态"
+    is_terminal: true
+
+# 合法状态迁移表
+transitions:
+  RECEIVED: ["NORMALIZED"]
+  NORMALIZED: ["CONTEXT_RESOLVED"]
+  CONTEXT_RESOLVED: ["ANALYZED"]
+  ANALYZED: ["ROUTED"]
+  ROUTED: ["CLARIFYING", "PLANNING", "RETRIEVING", "TOOL_CALLING", "RESPONDING"]
+  CLARIFYING: ["RECEIVED", "FAILED"]
+  PLANNING: ["RETRIEVING"]
+  RETRIEVING: ["EVIDENCE_ASSEMBLING"]
+  TOOL_CALLING: ["RETRIEVING", "EVIDENCE_ASSEMBLING"]
+  EVIDENCE_ASSEMBLING: ["EVIDENCE_VALIDATING"]
+  EVIDENCE_VALIDATING: ["GENERATING", "RETRIEVING", "REFUSING"]
+  GENERATING: ["ANSWER_VALIDATING"]
+  ANSWER_VALIDATING: ["RESPONDING", "RETRYING", "REFUSING"]
+  RETRYING: ["RETRIEVING", "GENERATING"]
+  RESPONDING: []
+  REFUSING: ["RESPONDING"]
+  FAILED: []

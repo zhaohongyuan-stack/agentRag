@@ -1,0 +1,159 @@
+[
+  {
+    "chunk_id": "400_gloss_sib",
+    "chunk_type": "glossary",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 附件13 名词解释 > 系统重要性银行",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》附件13 名词解释 — 系统重要性银行",
+    "content": "系统重要性银行是指因规模较大、结构和业务复杂度较高、与其他金融机构关联性较强，在金融体系中提供难以替代的关键服务，一旦发生重大风险事件或经营失败，可能对全球或本国金融体系和实体经济造成重大不利影响的商业银行。",
+    "content_raw": "系统重要性银行　是指因规模较大、结构和业务复杂度较高、与其他金融机构关联性较强，在金融体系中提供难以替代的关键服务，一旦发生重大风险事件或经营失败，可能对全球或本国金融体系和实体经济造成重大不利影响的商业银行。",
+    "evidence_snippet": "系统重要性银行是指因规模较大、结构和业务复杂度较高……一旦发生重大风险事件，可能对金融体系和实体经济造成重大不利影响的商业银行。",
+    "score": 0.961,
+    "scores_detail": {
+      "bm25": 16.78,
+      "dense": 0.94,
+      "rrf": 0.039,
+      "rerank": 0.961
+    },
+    "rank": 1,
+    "matched_by": ["bm25", "dense", "rerank"],
+    "trace": {
+      "request_id": "req-definition-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712181.0,
+      "bm25_rank": 1,
+      "bm25_score": 16.78,
+      "dense_rank": 1,
+      "dense_score": 0.94,
+      "rrf_score": 0.039,
+      "rerank_score": 0.961,
+      "filters_applied": {
+        "chunk_type": "glossary",
+        "glossary_term": "系统重要性银行"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "400_app13",
+        "chunk_type": "body",
+        "content": "附件13 名词解释"
+      },
+      "children": [],
+      "siblings": [
+        {
+          "chunk_id": "400_gloss_cap",
+          "chunk_type": "glossary",
+          "content": "资本充足率 是指商业银行持有的符合本办法规定的资本与风险加权资产之间的比率。"
+        },
+        {
+          "chunk_id": "400_gloss_t1",
+          "chunk_type": "glossary",
+          "content": "核心一级资本 是指商业银行在持续经营条件下无条件用来吸收损失的资本工具。"
+        }
+      ],
+      "prev": {
+        "chunk_id": "400_gloss_cap",
+        "chunk_type": "glossary",
+        "content": "资本充足率 是指商业银行持有的符合本办法规定的资本与风险加权资产之间的比率。"
+      },
+      "next": {
+        "chunk_id": "400_gloss_d_sib",
+        "chunk_type": "glossary",
+        "content": "国内系统重要性银行 是指经中国人民银行、国家金融监督管理总局认定，在国内金融体系中具有系统重要性的商业银行。"
+      }
+    },
+    "metadata": {
+      "parser_type": "pdf_glossary",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "b2e4f6a8c1d3...",
+      "attachment_no": "附件13",
+      "applicable_scope": "全部",
+      "normative_level": "definitional",
+      "glossary_term": "系统重要性银行",
+      "glossary_definition": "因规模较大、结构和业务复杂度较高、与其他金融机构关联性较强，在金融体系中提供难以替代的关键服务，一旦发生重大风险事件或经营失败，可能对全球或本国金融体系和实体经济造成重大不利影响的商业银行。",
+      "numeric_conditions": [],
+      "keywords": ["系统重要性银行", "规模较大", "业务复杂度", "关键服务", "重大不利影响"],
+      "cross_attachment_refs": ["正文第四十五条"],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "docSIB_gloss_d_sib",
+    "chunk_type": "glossary",
+    "doc_id": "doc-SIB",
+    "doc_name": "系统重要性银行评估办法",
+    "doc_title": "系统重要性银行评估办法",
+    "hierarchy_path": "系统重要性银行评估办法 > 第三条 > 国内系统重要性银行",
+    "source": "系统重要性银行评估办法.pdf",
+    "citation": "《系统重要性银行评估办法》第三条 — 国内系统重要性银行",
+    "content": "国内系统重要性银行是指经中国人民银行、国家金融监督管理总局认定，在国内金融体系中具有系统重要性的商业银行。系统重要性银行的评估指标包括规模、关联度、可替代性、复杂性、跨境业务等维度。",
+    "content_raw": "国内系统重要性银行　是指经中国人民银行、国家金融监督管理总局认定，在国内金融体系中具有系统重要性的商业银行。",
+    "evidence_snippet": "国内系统重要性银行是指经中国人民银行、国家金融监督管理总局认定，在国内金融体系中具有系统重要性的商业银行。",
+    "score": 0.918,
+    "scores_detail": {
+      "bm25": 14.12,
+      "dense": 0.89,
+      "rrf": 0.034,
+      "rerank": 0.918
+    },
+    "rank": 2,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-definition-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712181.0,
+      "bm25_rank": 2,
+      "bm25_score": 14.12,
+      "dense_rank": 2,
+      "dense_score": 0.89,
+      "rrf_score": 0.034,
+      "rerank_score": 0.918,
+      "filters_applied": {
+        "chunk_type": "glossary",
+        "glossary_term": "系统重要性银行"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "docSIB_c3",
+        "chunk_type": "clause",
+        "content": "第三条 本办法所称系统重要性银行，是指经认定具有系统重要性的商业银行。"
+      },
+      "children": [],
+      "siblings": [],
+      "prev": {
+        "chunk_id": "docSIB_c2",
+        "chunk_type": "clause",
+        "content": "第二条 本办法适用于在中华人民共和国境内设立的商业银行。"
+      },
+      "next": {
+        "chunk_id": "docSIB_c4",
+        "chunk_type": "clause",
+        "content": "第四条 系统重要性银行的评估指标包括规模、关联度、可替代性、复杂性、跨境业务等维度。"
+      }
+    },
+    "metadata": {
+      "parser_type": "pdf_glossary",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2024-12-20T14:00:00Z",
+      "source_url": "https://www.pbc.gov.cn/...",
+      "sha256": "c3f5a7b9d2e4...",
+      "attachment_no": "正文",
+      "applicable_scope": "国内系统重要性银行",
+      "normative_level": "definitional",
+      "glossary_term": "国内系统重要性银行",
+      "glossary_definition": "经中国人民银行、国家金融监督管理总局认定，在国内金融体系中具有系统重要性的商业银行。",
+      "numeric_conditions": [],
+      "keywords": ["国内系统重要性银行", "认定", "评估指标", "规模", "关联度", "可替代性", "复杂性", "跨境业务"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  }
+]

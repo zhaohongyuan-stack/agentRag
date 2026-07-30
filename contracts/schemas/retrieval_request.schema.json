@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "retrieval_request.schema.json",
+  "title": "RetrievalRequest",
+  "description": "检索请求 — B组向A组发起的检索输入（对齐A组 retrieval_request.py）",
+  "type": "object",
+  "required": ["query"],
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "检索查询文本"
+    },
+    "top_k": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200,
+      "default": 10,
+      "description": "返回结果条数"
+    },
+    "strategy": {
+      "type": "string",
+      "enum": ["hybrid", "bm25", "dense", "exact", "metadata", "relation", "table"],
+      "default": "hybrid",
+      "description": "检索策略"
+    },
+    "rerank": {
+      "type": "string",
+      "enum": ["none", "cross_enc", "llm"],
+      "default": "none",
+      "description": "精排模式"
+    },
+    "bm25_k": { "type": "integer", "default": 20, "description": "BM25粗排候选数" },
+    "vector_k": { "type": "integer", "default": 20, "description": "向量粗排候选数" },
+    "rrf_k": { "type": "integer", "default": 60, "description": "RRF融合平滑常数" },
+    "rerank_k": { "type": "integer", "default": 30, "description": "送入精排的候选数" },
+    "filters": {
+      "type": "object",
+      "description": "元数据过滤条件，AND组合",
+      "properties": {
+        "chunk_type": { "type": "string" },
+        "doc_id": { "type": "string" },
+        "doc_name": { "type": "string" },
+        "chapter_number": { "type": "string" },
+        "clause_number": { "type": "string" },
+        "applicable_scope": { "type": "string" },
+        "normative_level": { "type": "string" },
+        "table_name": { "type": "string" },
+        "glossary_term": { "type": "string" },
+        "attachment_no": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "exact_mode": {
+      "type": "string",
+      "enum": ["contains", "exact", "regex", "prefix"],
+      "default": "contains"
+    },
+    "expand_context": { "type": "boolean", "default": false },
+    "context_window": { "type": "integer", "default": 2 },
+    "include_content_raw": { "type": "boolean", "default": false },
+    "include_evidence": { "type": "boolean", "default": true },
+    "max_chars_per_hit": { "type": "integer", "default": 2000 },
+    "request_id": { "type": "string" },
+    "caller": { "type": "string", "description": "调用方标识" },
+    "timestamp": { "type": "number" }
+  }
+}

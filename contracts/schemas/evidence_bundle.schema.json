@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "evidence_bundle.schema.json",
+  "title": "EvidenceBundle",
+  "description": "证据包 — B组内部构建，将RetrievalHit转换为回答级证据",
+  "type": "object",
+  "required": ["bundle_id", "claim_slots", "sufficiency"],
+  "properties": {
+    "bundle_id": { "type": "string", "description": "证据包唯一标识" },
+    "query_id": { "type": "string", "description": "关联的查询ID" },
+    "claim_slots": {
+      "type": "array",
+      "description": "声明槽位列表",
+      "items": {
+        "type": "object",
+        "required": ["claim_id", "description", "status"],
+        "properties": {
+          "claim_id": { "type": "string" },
+          "description": { "type": "string", "description": "声明描述" },
+          "slot_type": { "type": "string", "enum": ["subject", "metric", "value", "source", "effective_date", "exception", "legal_basis", "definition", "scope"] },
+          "status": { "type": "string", "enum": ["pending", "supported", "missing", "conflict"] },
+          "evidence_ids": { "type": "array", "items": { "type": "string" } },
+          "conflicting_evidence_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "evidence_items": {
+      "type": "array",
+      "description": "证据项列表",
+      "items": {
+        "type": "object",
+        "required": ["evidence_id", "chunk_id", "source"],
+        "properties": {
+          "evidence_id": { "type": "string" },
+          "chunk_id": { "type": "string", "description": "来源chunk ID" },
+          "source": { "type": "string", "description": "引用格式" },
+          "content": { "type": "string", "description": "证据原文" },
+          "score": { "type": "number", "description": "相关性得分" },
+          "authority_level": { "type": "string", "enum": ["law", "regulation", "normative_doc", "data", "unknown"] },
+          "version_status": { "type": "string", "enum": ["draft", "active", "superseded", "expired", "repealed"] },
+          "matched_claims": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "sufficiency": {
+      "type": "object",
+      "required": ["score", "threshold", "is_sufficient"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "threshold": { "type": "number", "default": 0.85 },
+        "is_sufficient": { "type": "boolean" },
+        "components": {
+          "type": "object",
+          "properties": {
+            "claim_coverage": { "type": "number" },
+            "source_authority": { "type": "number" },
+            "version_validity": { "type": "number" },
+            "condition_completeness": { "type": "number" },
+            "cross_channel_consistency": { "type": "number" },
+            "conflict_penalty": { "type": "number" },
+            "missing_condition_penalty": { "type": "number" }
+          }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "description": "检测到的证据冲突",
+      "items": {
+        "type": "object",
+        "properties": {
+          "conflict_id": { "type": "string" },
+          "claim_id": { "type": "string" },
+          "conflict_type": { "type": "string", "enum": ["value_conflict", "version_conflict", "scope_conflict", "authority_conflict"] },
+          "evidence_ids": { "type": "array", "items": { "type": "string" } },
+          "resolution": { "type": "string", "enum": ["auto_resolved", "needs_human", "parallel_display"] },
+          "resolved_value": { "type": "string" }
+        }
+      }
+    },
+    "missing_conditions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "缺失的条件列表"
+    },
+    "retrieval_rounds": { "type": "integer", "description": "检索轮次" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

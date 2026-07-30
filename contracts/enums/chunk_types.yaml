@@ -1,0 +1,87 @@
+# chunk_types — 文档片段类型枚举
+# 对齐 A组 chunk.py CHUNK_TYPE_ICONS 和实际数据
+
+chunk_types:
+  clause:
+    value: "clause"
+    label: "法规条款"
+    description: "法律法规的具体条款内容"
+    icon: "📜"
+
+  subclause:
+    value: "subclause"
+    label: "子条款"
+    description: "条款下的子项"
+    icon: "📑"
+
+  item:
+    value: "item"
+    label: "款/项"
+    description: "条款中的款或项"
+    icon: "🔹"
+
+  glossary:
+    value: "glossary"
+    label: "术语定义"
+    description: "术语和概念的定义"
+    icon: "📖"
+
+  body:
+    value: "body"
+    label: "正文"
+    description: "文档正文段落"
+    icon: "📄"
+
+  table:
+    value: "table"
+    label: "表格结构"
+    description: "Markdown 格式的表格"
+    icon: "📊"
+
+  table_row:
+    value: "table_row"
+    label: "表格行"
+    description: "表格中的单行数据"
+    icon: "📈"
+
+  cell_fact:
+    value: "cell_fact"
+    label: "数据单元格"
+    description: "表格中的单个数据单元格（含行列标题）"
+    icon: "📈"
+
+  note:
+    value: "note"
+    label: "注释/报表说明"
+    description: "报表附注或说明性文字"
+    icon: "📝"
+
+  report_summary:
+    value: "report_summary"
+    label: "报告摘要"
+    description: "工作报告的摘要信息"
+    icon: "📋"
+
+  sheet_summary:
+    value: "sheet_summary"
+    label: "工作表摘要"
+    description: "Excel 工作表的结构摘要"
+    icon: "📋"
+
+  table_section:
+    value: "table_section"
+    label: "表格章节"
+    description: "表格中的分区块"
+    icon: "📑"
+
+  excel_sheet:
+    value: "excel_sheet"
+    label: "Excel工作表"
+    description: "完整的 Excel 工作表"
+    icon: "📋"
+
+  excel_range:
+    value: "excel_range"
+    label: "Excel区域"
+    description: "Excel 中的数据区域"
+    icon: "🔢"

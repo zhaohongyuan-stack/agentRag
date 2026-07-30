@@ -1,0 +1,89 @@
+{
+  "bundle_id": "eb-003",
+  "query_id": "q-003",
+  "claim_slots": [
+    {
+      "claim_id": "claim-1",
+      "description": "适用主体：商业银行",
+      "slot_type": "subject",
+      "status": "supported",
+      "evidence_ids": ["ev-1", "ev-2"]
+    },
+    {
+      "claim_id": "claim-2",
+      "description": "指标名称：核心一级资本充足率最低要求",
+      "slot_type": "metric",
+      "status": "supported",
+      "evidence_ids": ["ev-1", "ev-2"]
+    },
+    {
+      "claim_id": "claim-3",
+      "description": "阈值数值",
+      "slot_type": "value",
+      "status": "conflict",
+      "evidence_ids": ["ev-1"],
+      "conflicting_evidence_ids": ["ev-2"]
+    },
+    {
+      "claim_id": "claim-4",
+      "description": "法规依据",
+      "slot_type": "legal_basis",
+      "status": "supported",
+      "evidence_ids": ["ev-1", "ev-2"]
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-1",
+      "chunk_id": "400_c43",
+      "source": "《商业银行资本管理办法》（2023年版）第四十三条",
+      "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于5%。",
+      "score": 0.948,
+      "authority_level": "regulation",
+      "version_status": "active",
+      "matched_claims": ["claim-1", "claim-2", "claim-3", "claim-4"]
+    },
+    {
+      "evidence_id": "ev-2",
+      "chunk_id": "docA_c26",
+      "source": "《商业银行资本管理办法（试行）》（2012年版）第二十六条",
+      "content": "第二十六条 商业银行资本充足率监管要求包括最低资本要求……核心一级资本充足率不得低于4%。",
+      "score": 0.872,
+      "authority_level": "regulation",
+      "version_status": "superseded",
+      "matched_claims": ["claim-1", "claim-2", "claim-3", "claim-4"]
+    }
+  ],
+  "sufficiency": {
+    "score": 0.71,
+    "threshold": 0.85,
+    "is_sufficient": false,
+    "components": {
+      "claim_coverage": 1.0,
+      "source_authority": 0.95,
+      "version_validity": 0.5,
+      "condition_completeness": 0.8,
+      "cross_channel_consistency": 0.4,
+      "conflict_penalty": 0.3,
+      "missing_condition_penalty": 0.0
+    }
+  },
+  "conflicts": [
+    {
+      "conflict_id": "conflict-1",
+      "claim_id": "claim-3",
+      "conflict_type": "value_conflict",
+      "evidence_ids": ["ev-1", "ev-2"],
+      "resolution": "auto_resolved",
+      "resolved_value": "5%",
+      "description": "现行有效版本（2023年版）规定核心一级资本充足率不得低于5%，已被替代版本（2012年版）规定为4%。按版本时效性原则，采用现行有效版本。",
+      "conflicting_values": [
+        {"evidence_id": "ev-1", "value": "5%", "version_status": "active", "doc_version": "2023年版"},
+        {"evidence_id": "ev-2", "value": "4%", "version_status": "superseded", "doc_version": "2012年版"}
+      ]
+    }
+  ],
+  "missing_conditions": [],
+  "retrieval_rounds": 1,
+  "created_at": "2026-01-29T10:30:00Z"
+}

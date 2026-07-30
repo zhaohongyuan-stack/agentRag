@@ -1,0 +1,68 @@
+{
+  "bundle_id": "bundle-001",
+  "query_id": "req-clause-001",
+  "claim_slots": [
+    {
+      "claim_id": "claim-001",
+      "description": "核心一级资本充足率最低要求",
+      "slot_type": "metric",
+      "status": "supported",
+      "evidence_ids": ["ev-001"],
+      "conflicting_evidence_ids": []
+    },
+    {
+      "claim_id": "claim-002",
+      "description": "一级资本充足率最低要求",
+      "slot_type": "metric",
+      "status": "supported",
+      "evidence_ids": ["ev-001"],
+      "conflicting_evidence_ids": []
+    },
+    {
+      "claim_id": "claim-003",
+      "description": "资本充足率最低要求",
+      "slot_type": "metric",
+      "status": "supported",
+      "evidence_ids": ["ev-001"],
+      "conflicting_evidence_ids": []
+    },
+    {
+      "claim_id": "claim-004",
+      "description": "法规来源及效力等级",
+      "slot_type": "source",
+      "status": "supported",
+      "evidence_ids": ["ev-001"],
+      "conflicting_evidence_ids": []
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-001",
+      "chunk_id": "400_c43",
+      "source": "《商业银行资本管理办法》第四十三条",
+      "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于5%。（二）一级资本充足率不得低于6%。（三）资本充足率不得低于8%。",
+      "score": 0.952,
+      "authority_level": "regulation",
+      "version_status": "active",
+      "matched_claims": ["claim-001", "claim-002", "claim-003", "claim-004"]
+    }
+  ],
+  "sufficiency": {
+    "score": 0.92,
+    "threshold": 0.85,
+    "is_sufficient": true,
+    "components": {
+      "claim_coverage": 1.0,
+      "source_authority": 0.9,
+      "version_validity": 1.0,
+      "condition_completeness": 0.85,
+      "cross_channel_consistency": 0.95,
+      "conflict_penalty": 0.0,
+      "missing_condition_penalty": 0.0
+    }
+  },
+  "conflicts": [],
+  "missing_conditions": [],
+  "retrieval_rounds": 1,
+  "created_at": "2025-07-01T10:00:00Z"
+}

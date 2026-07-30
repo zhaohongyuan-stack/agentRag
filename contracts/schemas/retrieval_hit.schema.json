@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "retrieval_hit.schema.json",
+  "title": "RetrievalHit",
+  "description": "检索命中结果 — A组返回给B组的单条检索结果（对齐A组 retrieval_request.py）",
+  "type": "object",
+  "required": ["chunk_id", "chunk_type", "score", "rank"],
+  "properties": {
+    "chunk_id": { "type": "string" },
+    "chunk_type": { "type": "string" },
+    "doc_id": { "type": "string" },
+    "doc_name": { "type": "string" },
+    "doc_title": { "type": "string" },
+    "hierarchy_path": { "type": "string" },
+    "source": { "type": "string", "description": "source_file 别名" },
+    "citation": { "type": "string", "description": "LLM引用格式" },
+    "content": { "type": "string" },
+    "content_raw": { "type": "string" },
+    "evidence_snippet": { "type": "string" },
+    "score": { "type": "number", "description": "最终综合得分" },
+    "scores_detail": {
+      "type": "object",
+      "description": "分项得分",
+      "properties": {
+        "bm25": { "type": "number" },
+        "dense": { "type": "number" },
+        "rrf": { "type": "number" },
+        "rerank": { "type": "number" },
+        "exact": { "type": "number" }
+      }
+    },
+    "rank": { "type": "integer", "minimum": 1 },
+    "matched_by": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "命中通道列表，如 ['bm25', 'dense']"
+    },
+    "trace": {
+      "type": "object",
+      "description": "检索链路追溯",
+      "properties": {
+        "request_id": { "type": "string" },
+        "strategy": { "type": "string" },
+        "rerank": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "bm25_rank": { "type": ["integer", "null"] },
+        "bm25_score": { "type": ["number", "null"] },
+        "dense_rank": { "type": ["integer", "null"] },
+        "dense_score": { "type": ["number", "null"] },
+        "rrf_score": { "type": ["number", "null"] },
+        "rerank_score": { "type": ["number", "null"] },
+        "filters_applied": { "type": "object" }
+      }
+    },
+    "context": {
+      "type": ["object", "null"],
+      "description": "邻域上下文（expand_context=True时填充）",
+      "properties": {
+        "parent": { "type": ["object", "null"] },
+        "children": { "type": "array" },
+        "siblings": { "type": "array" },
+        "prev": { "type": ["object", "null"] },
+        "next": { "type": ["object", "null"] }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "完整元数据（文档级/结构级/语义级/表格级）",
+      "properties": {
+        "parser_type": { "type": "string" },
+        "parser_version": { "type": "string" },
+        "parse_timestamp": { "type": "string" },
+        "source_url": { "type": "string" },
+        "sha256": { "type": "string" },
+        "attachment_no": { "type": "string" },
+        "applicable_scope": { "type": "string" },
+        "chapter_number": { "type": "string" },
+        "clause_number": { "type": "string" },
+        "subclause_number": { "type": "string" },
+        "capital_tool_level": { "type": "string" },
+        "glossary_term": { "type": "string" },
+        "glossary_definition": { "type": "string" },
+        "normative_level": { "type": "string" },
+        "numeric_conditions": { "type": "array" },
+        "keywords": { "type": "array" },
+        "cross_attachment_refs": { "type": "array" },
+        "cross_table_refs": { "type": "array" },
+        "table_name": { "type": "string" },
+        "table_full_name": { "type": "string" },
+        "table_section_name": { "type": "string" },
+        "sheet_name": { "type": "string" },
+        "row_count": { "type": "integer" },
+        "col_count": { "type": "integer" },
+        "merge_info": { "type": "array" },
+        "cross_refs": { "type": "array" }
+      }
+    }
+  }
+}

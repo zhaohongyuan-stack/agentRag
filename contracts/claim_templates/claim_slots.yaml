@@ -1,0 +1,141 @@
+# 声明槽位模板 — 第一版预定义4类模板
+# 来源: 问题确认.md Q3.2 用户确认
+# LLM 只在预定义模板提取失败时兜底
+
+claim_templates:
+  # ═══════════════════════════════════════════════
+  # 模板1: 条款查询
+  # ═══════════════════════════════════════════════
+  clause_query:
+    intent: "clause_query"
+    description: "条款查询 — 查找特定条款的内容"
+    slots:
+      - slot_id: "subject"
+        description: "适用主体"
+        slot_type: "subject"
+        required: false
+        default: "全部"
+      - slot_id: "clause_number"
+        description: "条款编号"
+        slot_type: "source"
+        required: true
+        example: "第43条"
+      - slot_id: "doc_name"
+        description: "法规名称"
+        slot_type: "source"
+        required: true
+        example: "商业银行资本管理办法"
+      - slot_id: "content"
+        description: "条款内容"
+        slot_type: "definition"
+        required: true
+      - slot_id: "normative_level"
+        description: "规范强度"
+        slot_type: "scope"
+        required: false
+        default: "neutral"
+      - slot_id: "legal_basis"
+        description: "法规依据"
+        slot_type: "legal_basis"
+        required: true
+
+  # ═══════════════════════════════════════════════
+  # 模板2: 阈值查询
+  # ═══════════════════════════════════════════════
+  threshold:
+    intent: "threshold"
+    description: "阈值查询 — 查找监管指标的最低/最高要求"
+    slots:
+      - slot_id: "subject"
+        description: "适用主体"
+        slot_type: "subject"
+        required: true
+        example: "大型商业银行"
+      - slot_id: "metric_name"
+        description: "指标名称"
+        slot_type: "metric"
+        required: true
+        example: "核心一级资本充足率"
+      - slot_id: "threshold_value"
+        description: "阈值数值"
+        slot_type: "value"
+        required: true
+        example: "5%"
+      - slot_id: "effective_date"
+        description: "生效时间"
+        slot_type: "effective_date"
+        required: false
+      - slot_id: "exception"
+        description: "例外要求"
+        slot_type: "exception"
+        required: false
+      - slot_id: "legal_basis"
+        description: "法规依据"
+        slot_type: "legal_basis"
+        required: true
+
+  # ═══════════════════════════════════════════════
+  # 模板3: 定义查询
+  # ═══════════════════════════════════════════════
+  definition:
+    intent: "definition"
+    description: "定义查询 — 查找术语或概念的定义"
+    slots:
+      - slot_id: "term"
+        description: "术语名称"
+        slot_type: "metric"
+        required: true
+        example: "系统重要性银行"
+      - slot_id: "definition"
+        description: "定义内容"
+        slot_type: "definition"
+        required: true
+      - slot_id: "scope"
+        description: "适用范围"
+        slot_type: "scope"
+        required: false
+      - slot_id: "legal_basis"
+        description: "法规依据"
+        slot_type: "legal_basis"
+        required: true
+
+  # ═══════════════════════════════════════════════
+  # 模板4: 表格取数
+  # ═══════════════════════════════════════════════
+  table_lookup:
+    intent: "table_lookup"
+    description: "表格取数 — 从表格中查询具体数据"
+    slots:
+      - slot_id: "table_name"
+        description: "表名/表格编号"
+        slot_type: "source"
+        required: true
+        example: "附件1 表2"
+      - slot_id: "row_title"
+        description: "行标题（指标名称）"
+        slot_type: "metric"
+        required: true
+        example: "总资产"
+      - slot_id: "col_title"
+        description: "列标题（时间/期间）"
+        slot_type: "effective_date"
+        required: true
+        example: "2026年1月"
+      - slot_id: "value"
+        description: "数据值"
+        slot_type: "value"
+        required: true
+      - slot_id: "unit"
+        description: "单位"
+        slot_type: "scope"
+        required: false
+        default: "亿元"
+      - slot_id: "applicable_scope"
+        description: "适用范围"
+        slot_type: "subject"
+        required: false
+        default: "全部"
+      - slot_id: "source"
+        description: "数据来源"
+        slot_type: "legal_basis"
+        required: true

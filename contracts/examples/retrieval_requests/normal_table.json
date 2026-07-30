@@ -1,0 +1,24 @@
+{
+  "request_id": "req-table-001",
+  "query": "2026年1月银行业总资产",
+  "strategy": "table",
+  "rerank": "none",
+  "top_k": 5,
+  "bm25_k": 20,
+  "vector_k": 20,
+  "rrf_k": 60,
+  "rerank_k": 30,
+  "filters": {
+    "chunk_type": "cell_fact",
+    "table_name": "1. 银行业金融机构"
+  },
+  "exact_mode": "contains",
+  "expand_context": false,
+  "context_window": 1,
+  "include_content_raw": false,
+  "include_evidence": true,
+  "max_chars_per_hit": 2000,
+  "caller": "agent_platform.query_understanding",
+  "scenario": "normal",
+  "timestamp": 1769712120.0
+}

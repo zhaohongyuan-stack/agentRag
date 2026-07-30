@@ -1,0 +1,39 @@
+# normative_levels — 规范强度枚举
+# 来源: 问题确认.md Q1.3 用户确认
+
+normative_levels:
+  prohibitive:
+    value: "prohibitive"
+    label: "禁止性"
+    keywords: ["不得", "禁止"]
+    description: "禁止某些行为的规定，违反则违规"
+
+  obligatory:
+    value: "obligatory"
+    label: "义务性"
+    keywords: ["应当", "必须"]
+    description: "要求必须履行的义务"
+
+  permissive:
+    value: "permissive"
+    label: "授权性"
+    keywords: ["可以", "可"]
+    description: "允许但不强制的行为"
+
+  advisory:
+    value: "advisory"
+    label: "指导性"
+    keywords: ["建议", "宜"]
+    description: "建议性或推荐性的指导"
+
+  definitional:
+    value: "definitional"
+    label: "定义性"
+    keywords: ["是指"]
+    description: "对术语或概念的定义"
+
+  neutral:
+    value: "neutral"
+    label: "中性"
+    keywords: []
+    description: "不涉及规范强度的陈述性内容（默认值）"

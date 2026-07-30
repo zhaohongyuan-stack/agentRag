@@ -379,15 +379,18 @@ class RetrievalClient:
 
         A组策略: hybrid, bm25, dense, exact, metadata, relation, table
 
-        映射规则:
+        映射规则（按优先级）:
           - 包含 exact → exact
-          - 包含 table → table
+          - 包含 lexical + dense → hybrid（RRF 融合，覆盖面最广）
           - 包含 relation/neighborhood → relation
-          - 包含 lexical + dense → hybrid
+          - 包含 table → table
           - 仅 lexical → bm25
           - 仅 dense → dense
           - 仅 metadata → metadata
           - 其他 → hybrid
+
+        注意: hybrid 优先于 table，因为 hybrid 同时覆盖关键词和语义匹配，
+        而 table 策略需要 table_name 过滤器，普通查询不具备。
         """
         if not channels:
             return "hybrid"
@@ -396,12 +399,12 @@ class RetrievalClient:
 
         if "exact" in channel_set:
             return "exact"
-        if "table" in channel_set:
-            return "table"
-        if "relation" in channel_set or "neighborhood" in channel_set:
-            return "relation"
         if "lexical" in channel_set and "dense" in channel_set:
             return "hybrid"
+        if "relation" in channel_set or "neighborhood" in channel_set:
+            return "relation"
+        if "table" in channel_set:
+            return "table"
         if "lexical" in channel_set:
             return "bm25"
         if "dense" in channel_set:

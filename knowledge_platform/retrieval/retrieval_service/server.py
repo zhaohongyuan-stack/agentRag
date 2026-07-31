@@ -15,9 +15,9 @@ from .retrieval_request import RetrievalRequest, RetrievalStrategy
 # ── 加载 .env 环境变量 ──
 try:
     from dotenv import load_dotenv
-    # 从项目根目录加载 .env
+    # 从项目根目录加载 .env（server.py 在 knowledge_platform/retrieval/retrieval_service/ 下，向上 3 层）
     from pathlib import Path
-    _env_path = Path(__file__).resolve().parents[4] / ".env"
+    _env_path = Path(__file__).resolve().parents[3] / ".env"
     if _env_path.exists():
         load_dotenv(str(_env_path))
 except ImportError:

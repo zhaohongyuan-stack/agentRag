@@ -20,6 +20,7 @@ ChunkStore — 顶层统一 chunk 数据获取接口
 """
 
 import pickle
+import sys
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -290,8 +291,28 @@ class ChunkStore:
         p = Path(path)
         if not p.exists():
             return False
-        with open(p, "rb") as f:
-            data = pickle.load(f)
+
+        # ── 模块路径兼容 ──
+        # pickle 中 ChunkMeta 的 __module__ 可能是以下任一路径：
+        #   retrieval_service.chunk_store          （从 knowledge_platform/retrieval/ 启动时）
+        #   knowledge_platform.retrieval.retrieval_service.chunk_store  （从项目根启动时）
+        # 此处注册别名，确保两种路径都能正确反序列化
+        _current_mod = sys.modules.get(__name__)
+        if _current_mod:
+            for alias in (
+                "retrieval_service.chunk_store",
+                "knowledge_platform.retrieval.retrieval_service.chunk_store",
+            ):
+                if alias not in sys.modules:
+                    sys.modules[alias] = _current_mod
+
+        try:
+            with open(p, "rb") as f:
+                data = pickle.load(f)
+        except Exception as e:
+            print(f"  [ChunkStore] 元信息加载失败: {e}")
+            return False
+
         meta_list = data["meta_list"]
         self._chunk_id_list = data["chunk_id_list"]
         self._meta_map = {m.chunk_id: m for m in meta_list}

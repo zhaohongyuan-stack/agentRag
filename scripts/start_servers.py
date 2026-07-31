@@ -20,6 +20,7 @@ import time
 import signal
 import socket
 import subprocess
+import threading
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -58,6 +59,8 @@ SERVICES = {
 
 # 运行中的进程
 _processes = {}
+# 输出转发线程的停止标志
+_stop_flags = {}
 
 
 def print_banner():
@@ -133,6 +136,29 @@ def start_service(key: str) -> bool:
         print(f"  [{name}] 启动失败: {e}")
         return False
 
+    # ── 启动后台线程实时转发子进程 stdout ──
+    # 避免 subprocess.PIPE 缓冲导致看不到检索服务的加载日志
+    _stop_flags[key] = threading.Event()
+
+    def _stream_output(p, svc_name, stop_event):
+        """实时读取子进程 stdout 并打印（带服务名前缀）"""
+        try:
+            for line in iter(p.stdout.readline, ""):
+                if stop_event.is_set():
+                    break
+                if line:
+                    print(f"  [{svc_name}] {line.rstrip()}")
+                    sys.stdout.flush()
+        except (ValueError, OSError):
+            pass
+
+    stream_thread = threading.Thread(
+        target=_stream_output,
+        args=(proc, name, _stop_flags[key]),
+        daemon=True,
+    )
+    stream_thread.start()
+
     # 等待健康检查
     print(f"  [{name}] 等待服务就绪 (最多 60 秒) ...")
     ready = False
@@ -141,14 +167,9 @@ def start_service(key: str) -> bool:
     while time.time() - start_time < 60:
         # 检查进程是否意外退出
         if proc.poll() is not None:
-            # 读取输出
-            output = proc.stdout.read() if proc.stdout else ""
+            # 给输出线程一点时间读取剩余日志
+            time.sleep(0.5)
             print(f"  [{name}] 进程意外退出 (code={proc.returncode})")
-            if output:
-                # 打印最后 20 行输出
-                lines = output.strip().split("\n")
-                for line in lines[-20:]:
-                    print(f"    {line}")
             return False
 
         # 检查端口
@@ -171,6 +192,11 @@ def start_service(key: str) -> bool:
 
 def stop_service(key: str):
     """停止单个服务"""
+    # 先通知输出转发线程停止
+    if key in _stop_flags:
+        _stop_flags[key].set()
+        _stop_flags.pop(key, None)
+
     proc = _processes.get(key)
     if proc is None:
         return

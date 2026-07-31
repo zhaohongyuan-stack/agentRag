@@ -500,44 +500,74 @@ class RetrievalAPI:
 
         这是推荐的外部调用入口 — 稳定、可解释、可追溯。
         """
+        import time as _time
+
         if not self._store.chunk_count:
             return []
+
+        _t0 = _time.time()
+        print(f"\n{'─' * 60}")
+        print(f"  [检索路由] query=\"{req.query}\"  strategy={req.strategy.value}  top_k={req.top_k}")
+        print(f"{'─' * 60}")
 
         # ── Phase 0: 元数据过滤 ──
         # metadata.search() 返回 chunk_id 列表，转换为 doc_idx 集合供检索器过滤
         allowed: Optional[set] = None
         filters_applied: Dict[str, Any] = {}
         if req.filters and self.metadata:
+            _t_p0 = _time.time()
+            print(f"  [Phase 0] 元数据过滤 ...  filters={req.filters}")
             allowed = self.metadata.get_allowed_indices(
                 req.filters, self._store.chunk_ids
             )
             filters_applied = dict(req.filters)
             if not allowed:
+                print(f"  [Phase 0] 过滤后无匹配 chunk，返回空结果  ({_time.time() - _t_p0:.3f}s)")
                 return []
+            print(f"  [Phase 0] 过滤后允许 {len(allowed)} / {self._store.chunk_count} chunks  "
+                  f"({_time.time() - _t_p0:.3f}s)")
+        else:
+            print(f"  [Phase 0] 无元数据过滤，全库检索 ({self._store.chunk_count} chunks)")
 
         # ── Phase 1: 按策略检索 ──
+        _t_p1 = _time.time()
         strategy = req.strategy
+        print(f"  [Phase 1] 策略路由 → {strategy.value}")
 
         if strategy == RetrievalStrategy.BM25:
+            print(f"    [路由] → LexicalRetriever (BM25, jieba 分词)")
             raw = self.lexical.search(req.query, top_k=req.top_k, raw=True) if self.lexical else []
+            print(f"    [BM25] 返回 {len(raw)} 条候选  ({_time.time() - _t_p1:.3f}s)")
             hits = self._build_hits(req, raw, matched_by="bm25", filters_applied=filters_applied)
 
         elif strategy == RetrievalStrategy.DENSE:
+            print(f"    [路由] → DenseRetriever (向量语义, SiliconFlow API)")
             raw = self.dense.search(req.query, top_k=req.top_k, raw=True) if self.dense else []
+            print(f"    [Dense] 返回 {len(raw)} 条候选  ({_time.time() - _t_p1:.3f}s)")
             hits = self._build_hits(req, raw, matched_by="dense", filters_applied=filters_applied)
 
         elif strategy == RetrievalStrategy.EXACT:
+            print(f"    [路由] → ExactRetriever (FTS5 全文匹配, mode={req.exact_mode})")
             raw = self.exact.search(req.query, top_k=req.top_k, mode=req.exact_mode) if self.exact else []
+            print(f"    [Exact] 返回 {len(raw)} 条候选  ({_time.time() - _t_p1:.3f}s)")
             hits = self._build_hits_exact(req, raw, filters_applied=filters_applied)
 
         elif strategy == RetrievalStrategy.METADATA:
+            print(f"    [路由] → MetadataRetriever (SQL WHERE 过滤)")
             chunk_ids_result = self.metadata.search(req.filters, limit=req.top_k) if self.metadata else []
+            print(f"    [Metadata] 返回 {len(chunk_ids_result)} 条候选  ({_time.time() - _t_p1:.3f}s)")
             hits = self._build_hits_metadata(req, chunk_ids_result, filters_applied=filters_applied)
 
         elif strategy == RetrievalStrategy.HYBRID:
             # ── BM25 + Dense → RRF 融合（内联，同时捕获每路原始得分用于 trace）──
+            print(f"    [路由] → 双路召回: BM25 + Dense → RRF 融合")
+            _t_bm25 = _time.time()
             bm25_raw = self.lexical.search(req.query, top_k=req.bm25_k, raw=True) if self.lexical else []
+            print(f"    [BM25 路] 召回 {len(bm25_raw)} 条  ({_time.time() - _t_bm25:.3f}s)")
+
+            _t_dense = _time.time()
             dense_raw = self.dense.search(req.query, top_k=req.vector_k, raw=True) if self.dense else []
+            print(f"    [Dense 路] 召回 {len(dense_raw)} 条  ({_time.time() - _t_dense:.3f}s)")
 
             # 构建 per-doc_idx 的分数映射（用于后续 trace 填充）
             bm25_map: Dict[int, Tuple[int, float]] = {}  # doc_idx → (rank, score)
@@ -550,6 +580,7 @@ class RetrievalAPI:
                     dense_map[doc_idx] = (rank, score)
 
             # RRF 融合
+            _t_rrf = _time.time()
             rrf_scores: Dict[int, float] = {}
             rrf_k = req.rrf_k
             for rank, (doc_idx, _) in enumerate(bm25_raw):
@@ -560,11 +591,17 @@ class RetrievalAPI:
                     rrf_scores[doc_idx] = rrf_scores.get(doc_idx, 0) + 1.0 / (rrf_k + rank + 1)
 
             sorted_candidates = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+            print(f"    [RRF 融合] 候选 {len(sorted_candidates)} 条  "
+                  f"(BM25∩Dense={len(bm25_map.keys() & dense_map.keys())})  "
+                  f"({_time.time() - _t_rrf:.3f}s)")
 
             # Phase 2: 重排序精排（可选，通过硅基流动 API）
             if req.rerank == RerankMode.CROSS_ENC and self._reranker and len(sorted_candidates) > req.top_k:
+                _t_p2 = _time.time()
                 rerank_candidates = sorted_candidates[:req.rerank_k]
                 candidate_indices = [idx for idx, _ in rerank_candidates]
+                print(f"  [Phase 2] 重排序精排 (SiliconFlow API, "
+                      f"model={self._reranker_model}, 候选={len(rerank_candidates)})")
                 # ── 通过 ChunkStore 获取 content（LRU → DB 透明回源）──
                 candidate_chunk_ids = [self._store.get_chunk_id(idx) for idx in candidate_indices]
                 contents = self._store.get_content_batch(candidate_chunk_ids)
@@ -574,6 +611,7 @@ class RetrievalAPI:
                 # 返回 [{"index": int, "score": float}, ...] 按 score 降序
                 rerank_results = self._reranker.rerank(req.query, doc_texts, top_n=req.top_k)
                 scored = [(candidate_indices[r["index"]], r["score"]) for r in rerank_results]
+                print(f"    [Rerank] 精排完成，返回 {len(scored)} 条  ({_time.time() - _t_p2:.3f}s)")
 
                 hits = []
                 for rank, (doc_idx, rerank_score) in enumerate(scored[:req.top_k], 1):
@@ -602,6 +640,12 @@ class RetrievalAPI:
                     hits.append(hit)
             else:
                 # 无精排，直接取 RRF top_k
+                if req.rerank == RerankMode.CROSS_ENC and not self._reranker:
+                    print(f"  [Phase 2] 跳过重排序（reranker 未初始化）")
+                elif req.rerank == RerankMode.CROSS_ENC and len(sorted_candidates) <= req.top_k:
+                    print(f"  [Phase 2] 跳过重排序（候选数 {len(sorted_candidates)} ≤ top_k {req.top_k}）")
+                else:
+                    print(f"  [Phase 2] 未启用重排序")
                 hits = []
                 for rank, (doc_idx, rrf_score) in enumerate(sorted_candidates[:req.top_k], 1):
                     bm25_entry = bm25_map.get(doc_idx)
@@ -626,12 +670,23 @@ class RetrievalAPI:
 
         else:
             # strategy == RELATION / TABLE — 委托给对应检索器
+            print(f"    [路由] → 结构化检索 ({strategy.value})")
             hits = self._search_structured(req)
+
+        print(f"  [Phase 1] 完成，产出 {len(hits)} 条命中  ({_time.time() - _t_p1:.3f}s)")
 
         # ── Phase 3: 可选邻域扩展 ──
         if req.expand_context and self.neighborhood:
+            _t_p3 = _time.time()
+            print(f"  [Phase 3] 邻域上下文扩展 ...")
             hits = self._expand_context_for_hits(req, hits)
+            print(f"  [Phase 3] 扩展后 {len(hits)} 条命中  ({_time.time() - _t_p3:.3f}s)")
+        else:
+            print(f"  [Phase 3] 跳过邻域扩展")
 
+        _total = _time.time() - _t0
+        print(f"  [检索完成] {len(hits)} 条命中  总耗时 {_total:.3f}s")
+        print(f"{'─' * 60}\n")
         return hits
 
     # ============================================================

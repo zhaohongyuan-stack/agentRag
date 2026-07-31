@@ -67,6 +67,25 @@ class MetadataRetriever:
         self._records: List[Dict[str, Any]] = []  # 展平后的记录列表
 
     # ============================================================
+    # 持久化
+    # ============================================================
+    def save(self, path: str):
+        """持久化 Metadata 索引到文件"""
+        import pickle
+        with open(path, "wb") as f:
+            pickle.dump(self._records, f)
+
+    @classmethod
+    def load(cls, path: str) -> "MetadataRetriever":
+        """从文件加载 Metadata 索引"""
+        import pickle
+        with open(path, "rb") as f:
+            records = pickle.load(f)
+        retriever = cls()
+        retriever._records = records
+        return retriever
+
+    # ============================================================
     # 索引
     # ============================================================
     def index(self, chunks: List[Any]):

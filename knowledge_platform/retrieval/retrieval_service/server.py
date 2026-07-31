@@ -8,8 +8,8 @@ from typing import Optional
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
-from .retrieval_api import RetrievalAPI
-from .retrieval_request import RetrievalRequest, RetrievalStrategy
+from knowledge_platform.retrieval.retrieval_service.retrieval_api import RetrievalAPI
+from knowledge_platform.retrieval.retrieval_service.retrieval_request import RetrievalRequest, RetrievalStrategy
 
 # ── 启动时加载 ──
 _api: Optional[RetrievalAPI] = None
@@ -87,7 +87,11 @@ def search_chunks(req: ChunkSearchRequest):
 
 # ── 直接启动 ──
 if __name__ == "__main__":
-    import os
+    import os, sys
+    # 项目根目录加入 sys.path，使绝对导入生效
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.insert(0, project_root)
+    # 切换到 retrieval 目录，使 load("regulatory_docs/") 正确解析
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

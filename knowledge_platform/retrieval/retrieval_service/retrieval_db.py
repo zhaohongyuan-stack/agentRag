@@ -498,6 +498,52 @@ class RetrievalDB:
                 ).fetchone()[0]
             return conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
 
+    def load_all_chunks(self) -> List[Dict[str, Any]]:
+        """
+        从 DB 重建所有 chunk 数据（JOIN documents 表），
+        返回的 dict 可直接用于构造 Chunk 对象。
+        用于索引持久化：不再依赖源 JSON 文件。
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute("""
+                SELECT c.chunk_id, c.chunk_type, c.content, c.hierarchy_path,
+                       c.doc_id,
+                       d.doc_name, d.doc_title, d.source_file,
+                       c.metadata_json, c.content_raw, c.evidence_snippet,
+                       c.sub_chunks_json, c.keywords_json
+                FROM chunks c
+                LEFT JOIN documents d ON c.doc_id = d.doc_id
+                ORDER BY c.id
+            """).fetchall()
+
+        results = []
+        for row in rows:
+            (chunk_id, chunk_type, content, hierarchy_path,
+             doc_id, doc_name, doc_title, source_file,
+             metadata_json, content_raw, evidence_snippet,
+             sub_chunks_json, keywords_json) = row
+
+            meta = {}
+            if metadata_json:
+                try:
+                    meta = json.loads(metadata_json)
+                except json.JSONDecodeError:
+                    pass
+
+            results.append({
+                "chunk_id": chunk_id,
+                "chunk_type": chunk_type,
+                "content": content,
+                "hierarchy_path": hierarchy_path or "",
+                "doc_id": str(doc_id),
+                "doc_name": doc_name or "",
+                "doc_title": doc_title or doc_name or "",
+                "source_file": source_file or "",
+                "_meta": meta,
+            })
+
+        return results
+
     def get_chunk_ids_by_doc(self, doc_id: str) -> List[str]:
         """获取某文档下所有 chunk_id"""
         with self._get_conn() as conn:

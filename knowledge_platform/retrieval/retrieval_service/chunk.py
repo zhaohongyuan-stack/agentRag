@@ -9,7 +9,7 @@
 
 import json
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Set, Union
 
 
 # ============================================================
@@ -172,7 +172,8 @@ def flatten_metadata(raw: dict) -> dict:
 # ============================================================
 # 加载入口
 # ============================================================
-def load_json_chunks(source: Union[str, Path]) -> List[Chunk]:
+def load_json_chunks(source: Union[str, Path],
+                     skip_chunk_types: Optional[Set[str]] = None) -> List[Chunk]:
     """
     加载 JSON chunk 文件。
 
@@ -181,54 +182,66 @@ def load_json_chunks(source: Union[str, Path]) -> List[Chunk]:
       - .json 数组文件（整个文件是 chunk 数组）
       - 目录（递归扫描 .jsonl 和 .json 文件）
 
+    skip_chunk_types: 需要跳过的 chunk_type 集合，默认跳过 cell_fact 和 formula
+                      （单元格级别的 chunk 数量巨大但对检索无意义）
     返回 Chunk 列表。
     """
+    if skip_chunk_types is None:
+        skip_chunk_types = {"cell_fact", "formula"}
+
     source_path = Path(source)
     chunks: List[Chunk] = []
+    skipped_counter = [0]  # 用列表包装，在内部函数间传递可变引用
 
     if source_path.is_dir():
         files = sorted(source_path.rglob("*_chunks.jsonl")) + sorted(source_path.rglob("*_chunks.json"))
         # 排除隐藏目录（如 .cache），避免加载导出/缓存文件
         files = [f for f in files if not any(p.startswith('.') for p in f.parts)]
         for fpath in files:
-            _load_file(fpath, chunks)
+            _load_file(fpath, chunks, skip_chunk_types, skipped_counter)
     else:
-        _load_file(source_path, chunks)
+        _load_file(source_path, chunks, skip_chunk_types, skipped_counter)
 
-    print(f"  [加载] 共 {len(chunks)} 个 chunks")
+    skipped = skipped_counter[0]
+    if skipped > 0:
+        print(f"  [加载] 共 {len(chunks)} 个 chunks（已跳过 {skipped} 个 cell_fact/formula）")
+    else:
+        print(f"  [加载] 共 {len(chunks)} 个 chunks")
     return chunks
 
 
-def _load_file(fpath: Path, chunks: List[Chunk]):
+def _load_file(fpath: Path, chunks: List[Chunk],
+               skip_chunk_types: Set[str], skipped_counter: list):
     """加载单个 .jsonl 或 .json 文件"""
     try:
-        with open(fpath, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-        if not content:
-            return
-
         if fpath.suffix.lower() == ".jsonl":
-            _load_jsonl(content, chunks)
+            _load_jsonl_stream(fpath, chunks, skip_chunk_types, skipped_counter)
         else:
-            _load_json(content, chunks)
+            with open(fpath, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            if content:
+                _load_json(content, chunks, skip_chunk_types, skipped_counter)
     except Exception as e:
         print(f"  [跳过] 无法加载 {fpath.name}: {e}")
 
 
-def _load_jsonl(content: str, chunks: List[Chunk]):
-    """解析 JSON Lines 格式"""
-    for line in content.split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-            _append_chunk(obj, chunks)
-        except json.JSONDecodeError:
-            continue
+def _load_jsonl_stream(fpath: Path, chunks: List[Chunk],
+                       skip_chunk_types: Set[str], skipped_counter: list):
+    """流式解析 JSON Lines 文件（逐行读取，避免大文件 OOM）"""
+    with open(fpath, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                _append_chunk(obj, chunks, skip_chunk_types, skipped_counter)
+            except json.JSONDecodeError:
+                continue
 
 
-def _load_json(content: str, chunks: List[Chunk]):
+def _load_json(content: str, chunks: List[Chunk],
+               skip_chunk_types: Set[str], skipped_counter: list):
     """解析 JSON 数组或 {"chunks": [...]} 格式"""
     obj = json.loads(content)
     items = obj if isinstance(obj, list) else obj.get("chunks", [obj])
@@ -237,11 +250,16 @@ def _load_json(content: str, chunks: List[Chunk]):
     for item in items:
         if not isinstance(item, dict):
             continue
-        _append_chunk(item, chunks)
+        _append_chunk(item, chunks, skip_chunk_types, skipped_counter)
 
 
-def _append_chunk(raw: dict, chunks: List[Chunk]):
-    """将一条原始记录转为 Chunk 并追加到列表"""
+def _append_chunk(raw: dict, chunks: List[Chunk],
+                  skip_chunk_types: Set[str], skipped_counter: list):
+    """将一条原始记录转为 Chunk 并追加到列表（跳过指定类型）"""
+    chunk_type = raw.get("chunk_type", "clause")
+    if chunk_type in skip_chunk_types:
+        skipped_counter[0] += 1
+        return
     flat = flatten_metadata(raw)
     chunks.append(Chunk(
         chunk_id=flat["chunk_id"],

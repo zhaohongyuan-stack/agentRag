@@ -127,6 +127,40 @@ class LexicalRetriever:
             for idx, score in top
         ]
 
+    # ============================================================
+    # 持久化
+    # ============================================================
+    def save(self, path: str):
+        """持久化 BM25 索引到文件"""
+        import pickle
+        data = {
+            "documents": self.documents,
+            "_tokenized": self._tokenized,
+            "_doc_len": self._doc_len,
+            "_avgdl": self._avgdl,
+            "_idf": self._idf,
+            "_N": self._N,
+            "_metadatas": self._metadatas,
+        }
+        with open(path, "wb") as f:
+            pickle.dump(data, f)
+
+    @classmethod
+    def load(cls, path: str) -> "LexicalRetriever":
+        """从文件加载 BM25 索引"""
+        import pickle
+        with open(path, "rb") as f:
+            data = pickle.load(f)
+        retriever = cls()
+        retriever.documents = data["documents"]
+        retriever._tokenized = data["_tokenized"]
+        retriever._doc_len = data["_doc_len"]
+        retriever._avgdl = data["_avgdl"]
+        retriever._idf = data["_idf"]
+        retriever._N = data["_N"]
+        retriever._metadatas = data.get("_metadatas", [])
+        return retriever
+
     @property
     def metadatas(self) -> List[Dict[str, Any]]:
         return self._metadatas

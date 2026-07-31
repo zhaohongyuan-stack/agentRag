@@ -27,6 +27,25 @@ class TableRetriever:
         self._tables: Dict[str, Dict[str, Any]] = {}  # table_name → {headers, rows, chunks}
 
     # ============================================================
+    # 持久化
+    # ============================================================
+    def save(self, path: str):
+        """持久化 Table 索引到文件"""
+        import pickle
+        with open(path, "wb") as f:
+            pickle.dump(self._tables, f)
+
+    @classmethod
+    def load(cls, path: str) -> "TableRetriever":
+        """从文件加载 Table 索引"""
+        import pickle
+        with open(path, "rb") as f:
+            tables = pickle.load(f)
+        retriever = cls()
+        retriever._tables = tables
+        return retriever
+
+    # ============================================================
     # 索引构建
     # ============================================================
     def index(self, chunks: List[Any]):

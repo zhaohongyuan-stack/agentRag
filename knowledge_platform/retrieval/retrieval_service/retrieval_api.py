@@ -18,9 +18,8 @@ Retrieval API v1 — 统一检索接口，组合 7 大独立检索器
   - 向量文件导出
 """
 
-import hashlib
-import heapq
 import json
+import hashlib
 import numpy as np
 from collections import Counter
 from pathlib import Path
@@ -117,12 +116,18 @@ class RetrievalAPI:
              populate_db: bool = True,
              db_path: Optional[str] = None) -> "RetrievalAPI":
         source = str(source)
-        if db_path:
-            self._db = RetrievalDB(db_path)
+        source_path = Path(source)
+        cache_dir = (source_path / ".cache") if source_path.is_dir() else (source_path.parent / ".cache")
 
         print("=" * 60)
         print("  Retrieval API v1 — 加载全部检索器 ...")
         print("=" * 60)
+
+        # ── 尝试从缓存恢复（索引持久化：不依赖源 JSON 文件）──
+        if cache_dir.exists():
+            if self._try_load_from_cache(cache_dir):
+                return self
+            print("\n  [提示] 缓存不完整，将从 JSON 源文件构建 ...")
 
         # ── 1. 加载 JSON chunks ──
         print("\n[1/8] 加载 JSON chunk 文件 ...")
@@ -133,32 +138,26 @@ class RetrievalAPI:
         doc_texts = [c.content for c in self._chunks]
         print(f"  共 {len(self._chunks)} 个 chunks")
 
-        # ── 2. Lexical ──
-        print("\n[2/8] 构建 Lexical (BM25) 索引 ...")
-        self.lexical = LexicalRetriever()
-        self.lexical.index(doc_texts, metadatas=[self._meta(c) for c in self._chunks])
-
-        # ── 3. Dense + 缓存 ──
-        print("\n[3/8] 构建 Dense (向量) 索引 ...")
-        self.dense = DenseRetriever(self._embed_model)
-        source_path = Path(source)
-        cache_dir = (source_path / ".cache") if source_path.is_dir() else (source_path.parent / ".cache")
+        # ── 缓存目录 & 内容哈希（用于索引持久化）──
         cache_dir.mkdir(parents=True, exist_ok=True)
-        text_hash = hashlib.sha256("\n".join(doc_texts).encode()).hexdigest()[:16]
-        emb_cache = cache_dir / f"embeddings_{text_hash}.npy"
+        content_hash = hashlib.sha256("\n".join(doc_texts).encode()).hexdigest()[:16]
 
-        if emb_cache.exists():
-            print(f"  [缓存命中] {emb_cache.name}")
-            self.dense._load_model()
-            self.dense.embeddings = np.load(str(emb_cache))
-            self.dense.documents = doc_texts
-            self.dense._metadatas = [self._meta(c) for c in self._chunks]
+        # ── 2. Lexical (BM25) ──
+        bm25_cache = cache_dir / f"bm25_{content_hash}.pkl"
+        if bm25_cache.exists():
+            print("\n[2/8] 加载 Lexical (BM25) 缓存 ...")
+            self.lexical = LexicalRetriever.load(str(bm25_cache))
         else:
-            for old in cache_dir.glob("embeddings_*.npy"):
-                old.unlink()
-            self.dense.index(doc_texts, metadatas=[self._meta(c) for c in self._chunks])
-            np.save(str(emb_cache), self.dense.embeddings)
-            print(f"  [缓存已保存] {emb_cache.name}")
+            print("\n[2/8] 构建 Lexical (BM25) 索引 ...")
+            self.lexical = LexicalRetriever()
+            self.lexical.index(doc_texts, metadatas=[self._meta(c) for c in self._chunks])
+            self.lexical.save(str(bm25_cache))
+            print(f"  已缓存: {bm25_cache.name}")
+
+        # ── 3. Dense + FAISS 向量库 ──
+        print("\n[3/8] 构建 Dense (向量) 索引 + FAISS 向量库 ...")
+        self.dense = DenseRetriever(self._embed_model, use_faiss=True)
+        self.dense.index(doc_texts, metadatas=[self._meta(c) for c in self._chunks], cache_dir=str(cache_dir))
 
         # ── 4. Exact ──
         print("\n[4/8] 构建 Exact 索引 ...")
@@ -166,23 +165,41 @@ class RetrievalAPI:
         self.exact.index(doc_texts, metadatas=[self._meta(c) for c in self._chunks])
 
         # ── 5. Metadata ──
-        print("\n[5/8] 构建 Metadata 索引 ...")
-        self.metadata = MetadataRetriever()
-        self.metadata.index(self._chunks)
+        meta_cache = cache_dir / f"metadata_{content_hash}.pkl"
+        if meta_cache.exists():
+            print("\n[5/8] 加载 Metadata 缓存 ...")
+            self.metadata = MetadataRetriever.load(str(meta_cache))
+        else:
+            print("\n[5/8] 构建 Metadata 索引 ...")
+            self.metadata = MetadataRetriever()
+            self.metadata.index(self._chunks)
+            self.metadata.save(str(meta_cache))
+            print(f"  已缓存: {meta_cache.name}")
 
         # ── 6. DB + Relation / Neighborhood ──
-        print(f"\n[6/8] 写入关系数据库 ...")
-        if populate_db:
-            self._db.open()
+        db_cache = cache_dir / f"retrieval_{content_hash}.db"
+        self._db = RetrievalDB(db_path or str(db_cache))
+        self._db.open()
+        if populate_db and self._db.count_chunks() == 0:
+            print(f"\n[6/8] 写入关系数据库 ...")
             self._populate_db()
+        else:
+            print(f"\n[6/8] 加载关系数据库缓存 ...")
         self.relation = RelationRetriever(self._db)
         self.neighborhood = NeighborhoodRetriever(self._db)
         print(f"  文档: {len(self.relation.list_documents())}, Chunks: {self.relation.count_chunks()}")
 
         # ── 7. Table ──
-        print(f"\n[7/8] 构建 Table 索引 ...")
-        self.table = TableRetriever()
-        self.table.index(self._chunks)
+        table_cache = cache_dir / f"table_{content_hash}.pkl"
+        if table_cache.exists():
+            print(f"\n[7/8] 加载 Table 缓存 ...")
+            self.table = TableRetriever.load(str(table_cache))
+        else:
+            print(f"\n[7/8] 构建 Table 索引 ...")
+            self.table = TableRetriever()
+            self.table.index(self._chunks)
+            self.table.save(str(table_cache))
+            print(f"  已缓存: {table_cache.name}")
 
         # ── 8. Cross-Encoder (optional) ──
         if self._use_reranker:
@@ -194,12 +211,96 @@ class RetrievalAPI:
             print(f"\n[8/8] 跳过 Cross-Encoder（未启用）")
 
         self._loaded = True
+        self._print_summary()
+        return self
+
+    # ============================================================
+    # 索引持久化 — 从缓存恢复，不依赖源 JSON 文件
+    # ============================================================
+    def _try_load_from_cache(self, cache_dir: Path) -> bool:
+        """
+        尝试从缓存目录完整恢复所有检索器。
+        成功返回 True（后续启动无需 JSON 源文件）。
+        失败返回 False（需回退到 JSON 加载）。
+        """
+        # ── 1. 扫描缓存目录，找到内容哈希 ──
+        bm25_files = sorted(cache_dir.glob("bm25_*.pkl"))
+        if not bm25_files:
+            return False
+        content_hash = bm25_files[0].stem.replace("bm25_", "")
+
+        # ── 2. 检查所有必需缓存文件是否就绪 ──
+        required = [
+            cache_dir / f"bm25_{content_hash}.pkl",
+            cache_dir / f"metadata_{content_hash}.pkl",
+            cache_dir / f"table_{content_hash}.pkl",
+            cache_dir / f"retrieval_{content_hash}.db",
+        ]
+        faiss_index = list(cache_dir.glob(f"faiss_*_{content_hash}.index"))
+        if not all(p.exists() for p in required) or not faiss_index:
+            return False
+
+        print(f"\n  [缓存] 检测到完整索引 (hash={content_hash})，跳过 JSON 加载")
+
+        # ── 3. 从 DB 恢复 chunks ──
+        db_path = str(cache_dir / f"retrieval_{content_hash}.db")
+        self._db = RetrievalDB(db_path)
+        self._db.open()
+        chunk_count = self._db.count_chunks()
+        if chunk_count == 0:
+            return False
+
+        chunk_dicts = self._db.load_all_chunks()
+        self._chunks = [
+            Chunk(
+                chunk_id=d["chunk_id"],
+                chunk_type=d["chunk_type"],
+                content=d["content"],
+                hierarchy_path=d.get("hierarchy_path", ""),
+                source_file=d.get("source_file", ""),
+                doc_id=d["doc_id"],
+                doc_name=d.get("doc_name", ""),
+                doc_title=d.get("doc_title", ""),
+                metadata=d.get("_meta", {}),
+            )
+            for d in chunk_dicts
+        ]
+        doc_texts = [c.content for c in self._chunks]
+        print(f"  [缓存] 从 DB 恢复 {len(self._chunks)} 个 chunks")
+
+        # ── 4. 加载各检索器索引 ──
+        print(f"  [缓存] 加载 BM25 索引 ...")
+        self.lexical = LexicalRetriever.load(str(cache_dir / f"bm25_{content_hash}.pkl"))
+
+        print(f"  [缓存] 加载 Dense 向量索引 ...")
+        self.dense = DenseRetriever(self._embed_model, use_faiss=True)
+        self.dense.index(doc_texts, metadatas=[self._meta(c) for c in self._chunks], cache_dir=str(cache_dir))
+
+        print(f"  [缓存] 加载 Exact 索引 ...")
+        self.exact = ExactRetriever()
+        self.exact.index(doc_texts, metadatas=[self._meta(c) for c in self._chunks])
+
+        print(f"  [缓存] 加载 Metadata 索引 ...")
+        self.metadata = MetadataRetriever.load(str(cache_dir / f"metadata_{content_hash}.pkl"))
+
+        print(f"  [缓存] 加载 Table 索引 ...")
+        self.table = TableRetriever.load(str(cache_dir / f"table_{content_hash}.pkl"))
+
+        print(f"  [缓存] 加载关系数据库 ...")
+        self.relation = RelationRetriever(self._db)
+        self.neighborhood = NeighborhoodRetriever(self._db)
+
+        self._loaded = True
+        self._print_summary()
+        return True
+
+    def _print_summary(self):
+        """打印加载完成的摘要信息"""
         print(f"\n  Retrieval API v1 就绪 — "
               f"{len(Counter(c.doc_id for c in self._chunks))} 文档, "
               f"{len(self._chunks)} Chunks, "
               f"{len(self.table.list_tables())} 表格")
         print("=" * 60 + "\n")
-        return self
 
     # ============================================================
     # search — 便捷入口（薄包装，委托给 search_request）

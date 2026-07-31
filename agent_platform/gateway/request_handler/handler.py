@@ -149,9 +149,11 @@ class RequestHandler:
             sm.transition(AgentState.CONTEXT_RESOLVED, {"step": "context_resolve"})
 
             # ── 查询理解: 构建 QuerySpec ──
+            _step_t = _now_ms()
             query_spec: QuerySpec = self._query_spec_builder.build(
                 request.query, session_id=session.session_id
             )
+            logger.info(f"[步骤] 查询理解 → intent={query_spec.intent}, complexity={query_spec.complexity} ({_now_ms() - _step_t:.0f}ms)")
             sm.transition(AgentState.ANALYZED, {
                 "step": "analyze",
                 "intent": query_spec.intent,
@@ -159,6 +161,7 @@ class RequestHandler:
             })
 
             # ── 查询改写（Phase 2）──
+            _step_t = _now_ms()
             # 从会话历史构建上下文，用于指代消解
             session_context = self._build_session_context(session)
             rewritten = self._query_rewriter.rewrite(
@@ -168,9 +171,15 @@ class RequestHandler:
             )
             # 使用改写后的查询替代原始查询
             search_query = rewritten.contextualized_query or request.query
+            if search_query != request.query:
+                logger.info(f"[步骤] 查询改写 → '{search_query[:80]}' ({_now_ms() - _step_t:.0f}ms)")
+            else:
+                logger.info(f"[步骤] 查询改写 → 无变化 ({_now_ms() - _step_t:.0f}ms)")
 
             # ── 路由决策（Phase 2: 综合路由）──
+            _step_t = _now_ms()
             route_decision = self._route_policy.decide(query_spec)
+            logger.info(f"[步骤] 路由决策 → level={route_decision.level}, channels={route_decision.channels} ({_now_ms() - _step_t:.0f}ms)")
             sm.transition(AgentState.ROUTED, {
                 "step": "route",
                 "level": route_decision.level,
@@ -231,11 +240,14 @@ class RequestHandler:
             filters = self._build_filters(query_spec)
 
             # 调用检索（使用改写后的查询）
+            _step_t = _now_ms()
+            logger.info(f"[步骤] 检索中 → query='{search_query[:60]}', filters={filters or '无'}")
             retrieval_result = self._retrieval_client.search_by_spec(
                 query_text=search_query,
                 route_decision=route_decision,
                 filters=filters,
             )
+            logger.info(f"[步骤] 检索完成 → {retrieval_result.hit_count} hits, {retrieval_result.latency_ms:.0f}ms")
 
             # 检索失败处理
             if not retrieval_result.success:
@@ -259,6 +271,7 @@ class RequestHandler:
                 )
 
             # ── 证据验证 ──
+            logger.info(f"[步骤] 证据组装 → 充分性={evidence_bundle.sufficiency_score:.3f}, sufficient={evidence_bundle.is_sufficient}")
             sm.transition(AgentState.EVIDENCE_VALIDATING, {
                 "step": "evidence_validate",
                 "sufficiency": evidence_bundle.sufficiency_score,
@@ -271,6 +284,7 @@ class RequestHandler:
                     "reason": "证据不足",
                 })
                 sm.transition(AgentState.RESPONDING, {"step": "respond"})
+                logger.info("[步骤] 回答生成 → 证据不足，生成拒答")
                 answer = self._generator.generate(
                     intent=query_spec.intent,
                     evidence_bundle=evidence_bundle,
@@ -291,12 +305,15 @@ class RequestHandler:
 
             # ── 回答生成 ──
             sm.transition(AgentState.GENERATING, {"step": "generate"})
+            _step_t = _now_ms()
+            logger.info(f"[步骤] 回答生成中 → intent={query_spec.intent}, evidence_count={evidence_bundle.evidence_count}")
             answer = self._generator.generate(
                 intent=query_spec.intent,
                 evidence_bundle=evidence_bundle,
                 query_text=request.query,
                 ambiguities=query_spec.ambiguities,
             )
+            logger.info(f"[步骤] 回答生成完成 ({_now_ms() - _step_t:.0f}ms)")
 
             # ── 回答验证 ──
             sm.transition(AgentState.ANSWER_VALIDATING, {"step": "answer_validate"})

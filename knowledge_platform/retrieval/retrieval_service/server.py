@@ -67,6 +67,7 @@ def health_check():
         "status": "ok" if _api and _api.is_loaded else "loading",
         "service": "retrieval-api",
         "version": "1.0",
+        "docs": _api.doc_count if _api else 0,
         "chunks": _api.chunk_count if _api else 0,
     }
 

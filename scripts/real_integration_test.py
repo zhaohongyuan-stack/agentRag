@@ -75,6 +75,15 @@ class ObservabilityHandler(logging.Handler):
         self.logs.append(formatter.format(record))
 
 
+class RealtimeProgressHandler(logging.Handler):
+    """实时进度输出到 stdout — 仅显示 [步骤] 日志"""
+
+    def emit(self, record):
+        msg = record.getMessage()
+        if "[步骤]" in msg or "检索失败" in msg or "处理查询异常" in msg:
+            print(f"  ⏳ {msg}", flush=True)
+
+
 def setup_observability():
     """设置可观测性 — 返回 (tracer, collector, log_handler)"""
     tracer = Tracer()
@@ -84,8 +93,15 @@ def setup_observability():
     log_handler = ObservabilityHandler()
     log_handler.setLevel(logging.DEBUG)
 
+    # 实时进度输出（仅 [步骤] 级别日志）
+    progress_handler = RealtimeProgressHandler()
+    progress_handler.setLevel(logging.INFO)
+
     ap_logger = logging.getLogger("agent_platform")
+    # 清理旧 handler，避免交互模式下重复输出
+    ap_logger.handlers.clear()
     ap_logger.addHandler(log_handler)
+    ap_logger.addHandler(progress_handler)
     ap_logger.setLevel(logging.DEBUG)
 
     return tracer, collector, log_handler
@@ -222,6 +238,7 @@ def run_real_query(
     print_separator(f"提问: {query}")
     print(f"  request_id: {request_id}")
     print(f"  模式: 真实联调（HTTP 检索 + DeepSeek LLM）")
+    print(f"  ⏳ 开始处理 ...\n")
 
     start_total = time.perf_counter()
 
@@ -288,12 +305,13 @@ def check_retrieval_service(base_url: str = "http://127.0.0.1:8000") -> bool:
     import urllib.error
 
     try:
-        req = urllib.request.Request(f"{base_url}/api/v1/documents?limit=1")
+        req = urllib.request.Request(f"{base_url}/health")
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            if isinstance(data, list):
-                print(f"  ✓ 检索服务可用 — {len(data)} 文档")
-                return True
+            docs = data.get("docs", 0)
+            chunks = data.get("chunks", 0)
+            print(f"  ✓ 检索服务可用 — {docs} 文档, {chunks} chunks")
+            return True
     except Exception as e:
         print(f"  ✗ 检索服务不可用: {e}")
         return False

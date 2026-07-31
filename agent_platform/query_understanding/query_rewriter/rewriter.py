@@ -136,7 +136,14 @@ class QueryRewriter:
 
         # ── 步骤 1: 指代消解 ──
         contextualized = query
-        if session_context is not None:
+        # 仅当存在会话历史时才执行指代消解（首次查询无需 LLM 调用）
+        _has_context = session_context is not None and (
+            session_context.previous_queries
+            or session_context.mentioned_metrics
+            or session_context.mentioned_docs
+            or session_context.previous_entities
+        )
+        if _has_context:
             if self._llm_client.is_mock:
                 # Mock 模式: 使用规则消解
                 result = self._rule_based_resolve(query, session_context)

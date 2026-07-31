@@ -1295,6 +1295,11 @@ class RetrievalAPI:
         return self._store.chunk_count
 
     @property
+    def doc_count(self) -> int:
+        """文档数（唯一 doc_id 计数）"""
+        return len(set(m.doc_id for m in self._store._meta_map.values()))
+
+    @property
     def is_loaded(self) -> bool:
         return self._loaded
 

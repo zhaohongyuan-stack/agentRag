@@ -112,9 +112,11 @@ class LLMClient:
             self._sdk_client = OpenAI(
                 base_url=self._api_base,
                 api_key=self._api_key,
+                timeout=60.0,    # 60 秒超时（避免长时间卡死）
+                max_retries=2,   # 自动重试 2 次
             )
             self._backend = "sdk"
-            logger.debug("LLM 后端: openai SDK")
+            logger.debug("LLM 后端: openai SDK (timeout=60s, retries=2)")
             return
         except ImportError:
             logger.debug("openai 库未安装，尝试 httpx 后端")

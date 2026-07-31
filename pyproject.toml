@@ -10,34 +10,24 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.29.0",
     "pydantic>=2.6.0",
-    # Redis
-    "redis[hiredis]>=5.0.0",
-    # 数据库
-    "asyncpg>=0.29.0",
-    "sqlalchemy[asyncio]>=2.0.0",
-    "alembic>=1.13.0",
-    # 检索
-    "elasticsearch>=8.13.0",
-    "pymilvus>=2.4.0",
-    # LLM
-    "openai>=1.30.0",
-    "anthropic>=0.25.0",
-    "tiktoken>=0.7.0",
-    # 异步与任务
-    "aiohttp>=3.9.0",
-    "celery>=5.4.0",
-    # 可观测性
-    "opentelemetry-api>=1.25.0",
-    "opentelemetry-sdk>=1.25.0",
-    "prometheus-client>=0.20.0",
-    "structlog>=24.1.0",
-    # 工具
+    # 检索 — 向量化与语义检索
+    "sentence-transformers>=2.7.0",
+    "numpy>=1.26.0",
+    "modelscope>=1.10.0",
+    # 配置
     "pyyaml>=6.0",
-    "jsonschema>=4.22.0",
-    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
+# LLM 调用（未安装 openai 时自动回退 httpx 直连，两者均无时降级 Mock）
+llm = [
+    "openai>=1.30.0",
+    "httpx>=0.27.0",
+]
+# 会话持久化 / 计划缓存（未安装时自动降级为内存字典）
+redis = [
+    "redis[hiredis]>=5.0.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
@@ -45,6 +35,7 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "httpx>=0.27.0",
+    "jsonschema>=4.22.0",
 ]
 
 [tool.ruff]

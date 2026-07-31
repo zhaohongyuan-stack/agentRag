@@ -95,6 +95,17 @@ SCHEMA_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_docs_attachment   ON documents(attachment_no);",
 ]
 
+# FTS5 全文索引虚拟表（用于 ExactRetriever 的精确/子串/前缀匹配）
+# unicode61 tokenizer 按字分词，支持中文
+SCHEMA_FTS5 = """
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+    chunk_id UNINDEXED,
+    content,
+    doc_name UNINDEXED,
+    tokenize = 'unicode61'
+);
+"""
+
 
 class RetrievalDB:
     """SQLite 文档与 Chunk 关系存储"""
@@ -102,6 +113,7 @@ class RetrievalDB:
     def __init__(self, db_path: str = ":memory:"):
         self.db_path = str(db_path)
         self._conn: Optional[sqlite3.Connection] = None
+        self._fts5_available: bool = False
 
     @contextmanager
     def _get_conn(self):
@@ -124,6 +136,14 @@ class RetrievalDB:
         self._conn.execute(SCHEMA_CHUNKS)
         for idx_sql in SCHEMA_INDEXES:
             self._conn.execute(idx_sql)
+        # FTS5 全文索引（可用性已在环境检查中验证）
+        try:
+            self._conn.execute(SCHEMA_FTS5)
+        except sqlite3.OperationalError as e:
+            print(f"  [RetrievalDB] FTS5 不可用: {e}（ExactRetriever 将降级为 LIKE 查询）")
+            self._fts5_available = False
+        else:
+            self._fts5_available = True
         self._conn.commit()
         print(f"  [RetrievalDB] 数据库已打开: {self.db_path}")
         return self
@@ -506,6 +526,512 @@ class RetrievalDB:
                 (doc_id,)
             ).fetchall()
         return [r[0] for r in rows]
+
+    def get_existing_chunk_ids(self) -> set:
+        """获取数据库中所有已存在的 chunk_id 集合（用于增量写入判断）"""
+        with self._get_conn() as conn:
+            rows = conn.execute("SELECT chunk_id FROM chunks").fetchall()
+        return {r[0] for r in rows}
+
+    def get_existing_doc_ids(self) -> set:
+        """获取数据库中所有已存在的 doc_id 集合（用于增量写入判断）"""
+        with self._get_conn() as conn:
+            rows = conn.execute("SELECT doc_id FROM documents").fetchall()
+        return {r[0] for r in rows}
+
+    # ============================================================
+    # 灵活元数据过滤（MetadataRetriever DB 驱动模式）
+    # ============================================================
+
+    # 字段 → DB 列映射
+    _CHUNK_FILTER_COLS: Dict[str, str] = {
+        "chunk_type":         "chunk_type",
+        "doc_id":             "doc_id",
+        "content":            "content",
+        "hierarchy_path":     "hierarchy_path",
+        "parent_chunk_id":    "parent_chunk_id",
+        "chapter_number":     "chapter_number",
+        "clause_number":      "clause_number",
+        "subclause_number":   "subclause_number",
+        "applicable_scope":   "applicable_scope",
+        "normative_level":    "normative_level",
+        "capital_tool_level": "capital_tool_level",
+        "table_name":         "table_name",
+        "table_section_name": "table_section_name",
+        "sheet_name":         "sheet_name",
+        "glossary_term":      "glossary_term",
+    }
+    _DOC_FILTER_COLS: Dict[str, str] = {
+        "doc_name":      "doc_name",
+        "doc_title":     "doc_title",
+        "parser_type":   "parser_type",
+        "attachment_no": "attachment_no",
+    }
+    # doc_name/doc_title 使用子串匹配（与旧版 MetadataRetriever._match_eq 一致）
+    _SUBSTRING_FIELDS = {"doc_name", "doc_title"}
+    # keywords 存储为 JSON 数组文本
+    _KEYWORDS_FIELD = "keywords"
+
+    def search_by_filters(self, filters: Dict[str, Any],
+                          limit: int = 100) -> List[str]:
+        """
+        灵活的元数据过滤查询（SQL WHERE 驱动）。
+
+        支持的操作符：
+          eq (默认): 精确匹配（doc_name/doc_title 做子串匹配，keywords 做 JSON 包含）
+          in:        列表包含（OR 语义）
+          contains:  子串包含 (LIKE %value%)
+          regex:     正则匹配（LIKE 粗筛 + Python re 精排）
+          gt/gte/lt/lte: 数值比较 (CAST AS REAL)
+          prefix:    前缀匹配 (LIKE value%)
+          suffix:    后缀匹配 (LIKE %value)
+
+        参数：
+          filters: 过滤条件字典
+                   简单格式: {"chunk_type": "clause"}
+                   扩展格式: {"clause_number": {"value": ["12","13"], "op": "in"}}
+          limit:   最多返回条数
+
+        返回：
+          符合所有条件的 chunk_id 列表
+        """
+        import re as re_module
+
+        conditions: List[str] = []
+        params: List[Any] = []
+        needs_join = False
+        # 收集需要 post-filter 的正则条件
+        regex_post_filters: List[tuple] = []  # [(field, pattern)]
+
+        for field, condition in filters.items():
+            if isinstance(condition, dict):
+                value = condition.get("value")
+                op = condition.get("op", "eq")
+            else:
+                value = condition
+                op = "eq"
+
+            if value is None or value == "":
+                continue
+
+            # 确定 DB 列
+            if field in self._CHUNK_FILTER_COLS:
+                col = f"c.{self._CHUNK_FILTER_COLS[field]}"
+            elif field in self._DOC_FILTER_COLS:
+                col = f"d.{self._DOC_FILTER_COLS[field]}"
+                needs_join = True
+            elif field == self._KEYWORDS_FIELD:
+                col = "c.keywords_json"
+            else:
+                continue  # 未知字段跳过
+
+            # 按操作符构建 SQL 条件
+            if op == "eq":
+                if field in self._SUBSTRING_FIELDS:
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f"%{value}%")
+                elif field == self._KEYWORDS_FIELD:
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f'%"{value}"%')
+                else:
+                    conditions.append(f"{col} = ?")
+                    params.append(str(value))
+
+            elif op == "in":
+                if not isinstance(value, list):
+                    value = [value]
+                if field in self._SUBSTRING_FIELDS or field == self._KEYWORDS_FIELD:
+                    or_parts = []
+                    for v in value:
+                        or_parts.append(f"{col} LIKE ?")
+                        if field == self._KEYWORDS_FIELD:
+                            params.append(f'%"{v}"%')
+                        else:
+                            params.append(f"%{v}%")
+                    conditions.append(f"({' OR '.join(or_parts)})")
+                else:
+                    placeholders = ",".join("?" * len(value))
+                    conditions.append(f"{col} IN ({placeholders})")
+                    params.extend(str(v) for v in value)
+
+            elif op == "contains":
+                if field == self._KEYWORDS_FIELD:
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f'%"{value}"%')
+                else:
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f"%{value}%")
+
+            elif op == "prefix":
+                conditions.append(f"{col} LIKE ?")
+                params.append(f"{value}%")
+
+            elif op == "suffix":
+                conditions.append(f"{col} LIKE ?")
+                params.append(f"%{value}")
+
+            elif op in ("gt", "gte", "lt", "lte"):
+                op_map = {"gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+                conditions.append(f"CAST({col} AS REAL) {op_map[op]} ?")
+                params.append(float(value))
+
+            elif op == "regex":
+                # SQL 不支持正则，用 LIKE 粗筛 + Python re 精排
+                try:
+                    regex = re_module.compile(str(value), re_module.IGNORECASE)
+                except re_module.error:
+                    continue
+                regex_post_filters.append((field, regex))
+                # 提取字面字符做 LIKE 预筛
+                literal_parts = re_module.findall(r'[a-zA-Z0-9\u4e00-\u9fff]+', str(value))
+                if literal_parts:
+                    like_term = max(literal_parts, key=len)
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f"%{like_term}%")
+
+        # 构建 SQL
+        join_clause = " LEFT JOIN documents d ON c.doc_id = d.doc_id" if needs_join else ""
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        if regex_post_filters:
+            # 需要取回更多数据做正则 post-filter
+            query = f"""
+                SELECT c.chunk_id, c.content, c.keywords_json, c.hierarchy_path,
+                       c.chunk_type, c.doc_id, c.parent_chunk_id, c.chapter_number,
+                       c.clause_number, c.subclause_number, c.applicable_scope,
+                       c.normative_level, c.capital_tool_level, c.table_name,
+                       c.table_section_name, c.sheet_name, c.glossary_term,
+                       d.doc_name, d.doc_title, d.parser_type, d.attachment_no
+                FROM chunks c{join_clause}
+                WHERE {where_clause}
+                LIMIT ?
+            """
+            with self._get_conn() as conn:
+                rows = conn.execute(query, params + [limit * 5]).fetchall()
+
+            # Post-filter with regex
+            result_ids = []
+            for row in rows:
+                row_dict = dict(zip([
+                    "chunk_id", "content", "keywords_json", "hierarchy_path",
+                    "chunk_type", "doc_id", "parent_chunk_id", "chapter_number",
+                    "clause_number", "subclause_number", "applicable_scope",
+                    "normative_level", "capital_tool_level", "table_name",
+                    "table_section_name", "sheet_name", "glossary_term",
+                    "doc_name", "doc_title", "parser_type", "attachment_no",
+                ], row))
+
+                match_all = True
+                for field, regex in regex_post_filters:
+                    actual = str(row_dict.get(field, ""))
+                    if not regex.search(actual):
+                        match_all = False
+                        break
+
+                if match_all:
+                    result_ids.append(row_dict["chunk_id"])
+                    if len(result_ids) >= limit:
+                        break
+            return result_ids
+        else:
+            query = f"""
+                SELECT c.chunk_id
+                FROM chunks c{join_clause}
+                WHERE {where_clause}
+                ORDER BY c.id
+                LIMIT ?
+            """
+            with self._get_conn() as conn:
+                rows = conn.execute(query, params + [limit]).fetchall()
+            return [r[0] for r in rows]
+
+    def list_field_values_db(self, field: str) -> List[str]:
+        """
+        列出某个字段的所有唯一值（DB 驱动，用于构建过滤选项 UI）。
+        """
+        if field in self._CHUNK_FILTER_COLS:
+            col = self._CHUNK_FILTER_COLS[field]
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    f"SELECT DISTINCT {col} FROM chunks WHERE {col} != '' ORDER BY {col}"
+                ).fetchall()
+            return [str(r[0]) for r in rows if r[0]]
+        elif field in self._DOC_FILTER_COLS:
+            col = self._DOC_FILTER_COLS[field]
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    f"""SELECT DISTINCT d.{col} FROM documents d
+                        WHERE d.{col} != '' ORDER BY d.{col}"""
+                ).fetchall()
+            return [str(r[0]) for r in rows if r[0]]
+        return []
+
+    def count_by_field_db(self, field: str) -> Dict[str, int]:
+        """
+        按字段值分组计数（DB 驱动，返回 {value: count} 字典）。
+        对 chunk 字段统计 chunk 数，对 doc 字段通过 JOIN 统计 chunk 数。
+        """
+        if field in self._CHUNK_FILTER_COLS:
+            col = self._CHUNK_FILTER_COLS[field]
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    f"SELECT {col}, COUNT(*) FROM chunks GROUP BY {col} ORDER BY COUNT(*) DESC"
+                ).fetchall()
+            return {(str(r[0]) if r[0] else "(空)"): r[1] for r in rows}
+        elif field in self._DOC_FILTER_COLS:
+            col = self._DOC_FILTER_COLS[field]
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    f"""SELECT d.{col}, COUNT(*) FROM chunks c
+                        JOIN documents d ON c.doc_id = d.doc_id
+                        GROUP BY d.{col} ORDER BY COUNT(*) DESC"""
+                ).fetchall()
+            return {(str(r[0]) if r[0] else "(空)"): r[1] for r in rows}
+        return {}
+
+    # ============================================================
+    # FTS5 全文索引
+    # ============================================================
+    @staticmethod
+    def _tokenize_cjk(text: str) -> str:
+        """
+        将 CJK 字符之间插入空格，使 FTS5 unicode61 tokenizer 按字分词。
+
+        unicode61 默认将 CJK 连续字符视为单个 token（如 "总资产" → 1 个 token），
+        导致按字查询（"资"）无法命中。插入空格后每个字符成为独立 token。
+
+        非 CJK 字符（ASCII、标点等）保持不变。
+        """
+        if not text:
+            return ""
+        result = []
+        for ch in text:
+            # CJK 统一表意文字范围：U+4E00 ~ U+9FFF
+            # CJK 扩展 A：U+3400 ~ U+4DBF
+            # CJK 兼容：U+F900 ~ U+FAFF
+            if ('\u4e00' <= ch <= '\u9fff' or
+                '\u3400' <= ch <= '\u4dbf' or
+                '\uf900' <= ch <= '\ufaff'):
+                result.append(f" {ch} ")
+            else:
+                result.append(ch)
+        return "".join(result)
+
+    def populate_fts5_index(self):
+        """
+        从 chunks 表填充 FTS5 索引。
+        先清空旧索引，再全量插入（幂等）。
+        在 insert_chunks 后调用。
+
+        ⚠️ CJK 预分词：content 和 doc_name 在写入 FTS5 前经过 _tokenize_cjk，
+        使每个中文字符成为独立 token，支持按字 MATCH 查询。
+        """
+        if not self._fts5_available:
+            return
+
+        with self._get_conn() as conn:
+            # 清空旧索引
+            conn.execute("DELETE FROM chunks_fts")
+            # 从 chunks 表批量插入（CJK 预分词）
+            rows = conn.execute("""
+                SELECT c.chunk_id, c.content,
+                       COALESCE(d.doc_name, '')
+                FROM chunks c
+                LEFT JOIN documents d ON c.doc_id = d.doc_id
+            """).fetchall()
+
+            conn.executemany(
+                "INSERT INTO chunks_fts (chunk_id, content, doc_name) VALUES (?, ?, ?)",
+                [(r[0], self._tokenize_cjk(r[1]), self._tokenize_cjk(r[2])) for r in rows]
+            )
+            conn.commit()
+            count = conn.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0]
+            print(f"  [RetrievalDB] FTS5 索引已填充: {count} 条（CJK 预分词）")
+
+    def fts5_search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        FTS5 MATCH 全文搜索（用于 contains 模式）。
+
+        参数：
+          query:  搜索文本（自动按字拆分为 FTS5 查询表达式）
+          top_k:  返回条数
+
+        返回：
+          [{"chunk_id": str, "score": float, "match_pos": int}, ...]
+          按 BM25 分数降序
+        """
+        if not self._fts5_available:
+            return self._like_search(query, top_k)
+
+        # 构造 FTS5 查询表达式：将每个非空字符用引号包裹，用 OR 连接
+        # FTS5 unicode61 对中文按字分词，所以查询也要按字拆分
+        terms = []
+        for ch in query:
+            ch = ch.strip()
+            if ch and ch not in ('"', '*', '(', ')', ':'):
+                terms.append(f'"{ch}"')
+        if not terms:
+            return []
+
+        fts_query = " OR ".join(terms)
+
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT chunk_id, bm25(chunks_fts) as score
+                       FROM chunks_fts
+                       WHERE chunks_fts MATCH ?
+                       ORDER BY score
+                       LIMIT ?""",
+                    (fts_query, top_k)
+                ).fetchall()
+
+            results = []
+            for r in rows:
+                # bm25() 返回负值（越小越相关），转换为正分
+                score = -float(r[1]) if r[1] else 0.0
+                results.append({
+                    "chunk_id": r[0],
+                    "score": round(score, 4),
+                    "match_pos": 0,
+                })
+            return results
+        except sqlite3.OperationalError:
+            # FTS5 查询语法错误时降级为 LIKE
+            return self._like_search(query, top_k)
+
+    def _like_search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        LIKE 子串搜索（FTS5 不可用时的降级方案）。
+
+        返回：
+          [{"chunk_id": str, "score": float, "match_pos": int}, ...]
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT chunk_id, content FROM chunks
+                   WHERE content LIKE ?
+                   LIMIT ?""",
+                (f"%{query}%", top_k * 2)
+            ).fetchall()
+
+        results = []
+        query_lower = query.lower()
+        for r in rows:
+            chunk_id, content = r[0], r[1] or ""
+            count = content.lower().count(query_lower)
+            score = min(count, 10) / 10.0
+            pos = content.lower().find(query_lower)
+            results.append({
+                "chunk_id": chunk_id,
+                "score": round(score, 4),
+                "match_pos": pos if pos >= 0 else 0,
+            })
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
+
+    def regex_search(self, pattern: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        正则搜索：SQL LIKE 粗筛 + Python re 精排。
+        FTS5 不支持正则，所以分两步走。
+
+        返回：
+          [{"chunk_id": str, "score": float, "match_pos": int}, ...]
+        """
+        import re as re_module
+        try:
+            regex = re_module.compile(pattern, re_module.IGNORECASE)
+        except re_module.error:
+            return []
+
+        # LIKE 粗筛：提取正则中的字面字符做 LIKE 查询
+        # 简化策略：取 pattern 中最长的连续字母数字子串做 LIKE
+        literal_parts = re_module.findall(r'[a-zA-Z0-9\u4e00-\u9fff]+', pattern)
+        like_term = max(literal_parts, key=len) if literal_parts else ""
+
+        with self._get_conn() as conn:
+            if like_term:
+                rows = conn.execute(
+                    """SELECT chunk_id, content FROM chunks
+                       WHERE content LIKE ?
+                       LIMIT ?""",
+                    (f"%{like_term}%", top_k * 5)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT chunk_id, content FROM chunks LIMIT ?", (top_k * 5,)
+                ).fetchall()
+
+        results = []
+        for r in rows:
+            chunk_id, content = r[0], r[1] or ""
+            matches = regex.findall(content)
+            if matches:
+                score = min(len(matches), 10) / 10.0
+                m = regex.search(content)
+                results.append({
+                    "chunk_id": chunk_id,
+                    "score": round(score, 4),
+                    "match_pos": m.start() if m else 0,
+                })
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
+
+    def prefix_search(self, prefix: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        前缀搜索：查找 content 中任意行以指定前缀开头的 chunk。
+
+        返回：
+          [{"chunk_id": str, "score": float, "match_pos": int}, ...]
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT chunk_id, content FROM chunks
+                   WHERE content LIKE ?
+                   LIMIT ?""",
+                (f"{prefix}%", top_k * 3)
+            ).fetchall()
+
+        results = []
+        prefix_lower = prefix.lower()
+        for r in rows:
+            chunk_id, content = r[0], r[1] or ""
+            # 检查每一行是否以 prefix 开头
+            for line in content.split("\n"):
+                if line.strip().lower().startswith(prefix_lower):
+                    results.append({
+                        "chunk_id": chunk_id,
+                        "score": 1.0,
+                        "match_pos": 0,
+                    })
+                    break
+        return results[:top_k]
+
+    def exact_match(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        精确匹配：content 去除空白后与 query 完全相等。
+
+        返回：
+          [{"chunk_id": str, "score": float, "match_pos": int}, ...]
+        """
+        import re as re_module
+        # 用 SQL 做初步筛选（content = query），去除首尾空白
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                """SELECT chunk_id, content FROM chunks
+                   WHERE TRIM(content) = TRIM(?)
+                   LIMIT ?""",
+                (query, top_k)
+            ).fetchall()
+
+        results = []
+        for r in rows:
+            results.append({
+                "chunk_id": r[0],
+                "score": 1.0,
+                "match_pos": 0,
+            })
+        return results
 
     # ============================================================
     # 数据导出

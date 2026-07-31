@@ -52,5 +52,8 @@ tmp/
 .DS_Store
 Thumbs.db
 
+# 检索索引缓存（.pkl / .npy / retrieval.db）
+**/.cache/
+
 # 原始设计文档（不提交）
 docx/

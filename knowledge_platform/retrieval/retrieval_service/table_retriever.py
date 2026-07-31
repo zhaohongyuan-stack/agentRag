@@ -17,6 +17,8 @@
 """
 
 import re
+import pickle
+from pathlib import Path
 from typing import List, Dict, Optional, Any
 
 
@@ -140,6 +142,26 @@ class TableRetriever:
     def list_tables(self) -> List[str]:
         """列出所有已索引的表名"""
         return sorted(self._tables.keys())
+
+    # ============================================================
+    # 持久化
+    # ============================================================
+    def save_index(self, path: str) -> None:
+        """持久化到 pickle 文件"""
+        data = {"_tables": self._tables}
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_index(self, path: str) -> bool:
+        """从 pickle 文件加载，成功返回 True"""
+        p = Path(path)
+        if not p.exists():
+            return False
+        with open(p, "rb") as f:
+            data = pickle.load(f)
+        self._tables = data["_tables"]
+        return True
 
     def get_table_info(self, table_name: str) -> Optional[Dict[str, Any]]:
         """获取表的元信息（列数、行数）"""

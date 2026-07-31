@@ -381,14 +381,31 @@ class Retriever:
 
     def __init__(self,
                  data_dir: str = "regulatory_docs",
-                 embed_model: str = "BAAI/bge-small-zh-v1.5"):
+                 embed_model: str = "BAAI/bge-small-zh-v1.5",
+                 use_embed_api: bool = False,
+                 embed_api_key: Optional[str] = None,
+                 embed_api_model: Optional[str] = None,
+                 use_reranker: bool = False,
+                 reranker_api_key: Optional[str] = None):
         self._data_dir = data_dir
         self._embed_model = embed_model
+        self._use_embed_api = use_embed_api
+        self._embed_api_key = embed_api_key
+        self._embed_api_model = embed_api_model
+        self._use_reranker = use_reranker
+        self._reranker_api_key = reranker_api_key
         self._api: Optional[RetrievalAPI] = None
 
     def load(self) -> "Retriever":
         """加载数据 + 构建全部索引（启动时调用一次）"""
-        self._api = RetrievalAPI(embed_model=self._embed_model)
+        self._api = RetrievalAPI(
+            embed_model=self._embed_model,
+            use_embed_api=self._use_embed_api,
+            embed_api_key=self._embed_api_key,
+            embed_api_model=self._embed_api_model,
+            use_reranker=self._use_reranker,
+            reranker_api_key=self._reranker_api_key,
+        )
         self._api.load(self._data_dir)
         return self
 

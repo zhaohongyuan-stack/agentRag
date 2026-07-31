@@ -1,13 +1,13 @@
 .PHONY: install dev up down test test-unit test-integration lint format typecheck run-agent run-retrieval clean
 
-# 安装
+# 安装（核心 + 开发 + LLM + Redis）
 install:
-	pip install -e ".[dev]"
+	pip install -e ".[dev,llm,redis]"
 
 dev:
-	pip install -e ".[dev]"
+	pip install -e ".[dev,llm,redis]"
 
-# 基础设施
+# 基础设施（仅 Redis，可选）
 up:
 	docker-compose up -d
 
@@ -35,24 +35,25 @@ typecheck:
 	mypy agent_platform knowledge_platform
 
 # 服务
-run-agent:
-	uvicorn services.agent_api.main:app --reload --host 0.0.0.0 --port 8000
-
+# A组检索服务（端口 8000）
 run-retrieval:
-	uvicorn services.retrieval_api.main:app --reload --host 0.0.0.0 --port 8001
+	cd knowledge_platform/retrieval && python -m retrieval_service.server
 
-# 脚本
-validate-data:
-	python scripts/validate_parsed_data/main.py
+# B组 Agent 服务（端口 8002，避免与 A组冲突）
+run-agent:
+	AGENT_PORT=8002 python -m agent_platform.server
 
-build-indexes:
-	python scripts/build_indexes/main.py
+# 一键启动 A组 + B组（推荐）
+run-all:
+	python scripts/start_servers.py
 
-run-eval:
-	python scripts/run_evaluation/main.py
+# 检查服务状态
+check-services:
+	python scripts/start_servers.py --check
 
+# 联调测试
 smoke-test:
-	python scripts/smoke_test/main.py
+	python scripts/real_integration_test.py "银行业总资产是多少"
 
 # 清理
 clean:

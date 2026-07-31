@@ -3,6 +3,7 @@ Retrieval HTTP API — FastAPI server
 启动: python -m retrieval_service.server
 """
 
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, Query
@@ -11,6 +12,38 @@ from pydantic import BaseModel
 from .retrieval_api import RetrievalAPI
 from .retrieval_request import RetrievalRequest, RetrievalStrategy
 
+# ── 加载 .env 环境变量 ──
+try:
+    from dotenv import load_dotenv
+    # 从项目根目录加载 .env
+    from pathlib import Path
+    _env_path = Path(__file__).resolve().parents[4] / ".env"
+    if _env_path.exists():
+        load_dotenv(str(_env_path))
+except ImportError:
+    pass
+
+
+def _build_retrieval_api() -> RetrievalAPI:
+    """从环境变量构建 RetrievalAPI（支持 API 嵌入 + 重排序）"""
+    use_embed_api = os.environ.get("USE_EMBED_API", "").lower() in ("true", "1", "yes")
+    embed_api_key = os.environ.get("SILICONFLOW_EMBED_API_KEY") or None
+    embed_api_model = os.environ.get("SILICONFLOW_EMBED_MODEL") or None
+
+    use_reranker = os.environ.get("USE_RERANKER", "").lower() in ("true", "1", "yes")
+    reranker_api_key = os.environ.get("SILICONFLOW_RERANK_API_KEY") or None
+    reranker_model = os.environ.get("SILICONFLOW_RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
+
+    return RetrievalAPI(
+        use_embed_api=use_embed_api,
+        embed_api_key=embed_api_key,
+        embed_api_model=embed_api_model,
+        use_reranker=use_reranker,
+        reranker_api_key=reranker_api_key,
+        reranker_model=reranker_model,
+    )
+
+
 # ── 启动时加载 ──
 _api: Optional[RetrievalAPI] = None
 
@@ -18,12 +51,24 @@ _api: Optional[RetrievalAPI] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _api
-    _api = RetrievalAPI()
+    _api = _build_retrieval_api()
     _api.load("regulatory_docs/")
     yield
 
 
 app = FastAPI(title="Retrieval API", version="1.0", lifespan=lifespan)
+
+
+# ── 健康检查 ──
+@app.get("/health")
+def health_check():
+    """健康检查"""
+    return {
+        "status": "ok" if _api and _api.is_loaded else "loading",
+        "service": "retrieval-api",
+        "version": "1.0",
+        "chunks": _api.chunk_count if _api else 0,
+    }
 
 
 # ── 请求体模型 ──

@@ -42,24 +42,31 @@ ace-rag/
 ## 技术栈
 
 - Python 3.11+
-- PostgreSQL / Elasticsearch / Milvus / Redis
-- Docker / Kubernetes
-- OpenTelemetry / Prometheus / Grafana
+- SQLite（FTS5 全文检索 + 关系存储，替代 PostgreSQL）
+- 内存向量 + `.npy` 持久化（替代 Milvus，适合小规模知识库）
+- SiliconFlow API（嵌入 + 重排序）
+- DeepSeek API（LLM 回答生成）
+- Redis（可选，未配置时自动降级为内存模式）
 
 ## 快速开始
 
+详细的使用、联调和扩库说明见 [USAGE.md](USAGE.md)。
+
 ```bash
 # 安装依赖
-make install
+pip install -e ".[dev,llm]"
 
-# 启动基础设施
-make up
+# 配置环境变量
+cp .env.example .env   # 填写 SiliconFlow / DeepSeek API Key
+
+# 一键启动 A组检索服务 + B组 Agent 服务
+python scripts/start_servers.py
 
 # 运行测试
 make test
 
-# 启动 Agent 服务
-make run-agent
+# 真实联调测试
+python scripts/real_integration_test.py "银行业总资产是多少"
 ```
 
 ## 文档

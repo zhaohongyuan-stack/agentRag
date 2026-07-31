@@ -86,7 +86,7 @@ class CitationFormatter:
             index += 1
 
             result.append({
-                "index": index,
+                "index": str(index),
                 "citation": citation,
                 "source_doc": item.get("source_doc") or item.get("doc_name") or "",
                 "chunk_id": item.get("chunk_id", ""),

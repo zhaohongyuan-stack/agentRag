@@ -22,13 +22,30 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LLMMessage:
-    """对话消息"""
+    """对话消息
 
-    role: str  # system / user / assistant
+    支持的 role:
+      - system: 系统提示
+      - user: 用户消息
+      - assistant: 助手回复（可能携带 tool_calls）
+      - tool: 工具执行结果（需附带 tool_call_id 关联对应调用）
+    """
+
+    role: str  # system / user / assistant / tool
     content: str
+    # assistant 消息中的工具调用（OpenAI 兼容格式）
+    # [{"id": "call_xxx", "type": "function", "function": {"name": "...", "arguments": "..."}}]
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    # tool 角色消息的关联 ID（对应 assistant 消息中某个 tool_call 的 id）
+    tool_call_id: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {"role": self.role, "content": self.content}
+        d: Dict[str, Any] = {"role": self.role, "content": self.content}
+        if self.tool_calls:
+            d["tool_calls"] = self.tool_calls
+        if self.tool_call_id:
+            d["tool_call_id"] = self.tool_call_id
+        return d
 
 
 @dataclass
@@ -39,10 +56,20 @@ class LLMResponse:
     model: str = ""
     usage: Dict[str, int] = field(default_factory=dict)
     raw: Any = None
+    # 工具调用列表（OpenAI 兼容格式），无调用时为空列表
+    # [{"id": "call_xxx", "type": "function", "function": {"name": "...", "arguments": "..."}}]
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+    # 结束原因: "stop" | "tool_calls" | "length" | ""
+    finish_reason: str = ""
 
     @property
     def total_tokens(self) -> int:
         return self.usage.get("total_tokens", 0)
+
+    @property
+    def has_tool_calls(self) -> bool:
+        """响应中是否包含工具调用"""
+        return len(self.tool_calls) > 0
 
 
 class LLMClient:
@@ -162,6 +189,8 @@ class LLMClient:
         temperature: float = 0.3,
         max_tokens: int = 2048,
         response_format: Optional[Dict[str, str]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Any] = None,
         **kwargs,
     ) -> LLMResponse:
         """
@@ -173,15 +202,23 @@ class LLMClient:
             temperature: 温度参数
             max_tokens: 最大生成 token 数
             response_format: 响应格式（如 {"type": "json_object"}）
+            tools: 可用工具定义列表（OpenAI Function Calling 格式），
+                每项形如 {"type": "function", "function": {"name", "description", "parameters"}}
+            tool_choice: 工具选择策略，可选值:
+                - "auto": 模型自行决定（默认）
+                - "none": 禁止调用工具
+                - {"type": "function", "function": {"name": "xxx"}}: 强制调用指定工具
             **kwargs: 其他 OpenAI API 参数
 
         Returns:
-            LLMResponse 对象
+            LLMResponse 对象（可能包含 tool_calls）
         """
         use_model = model or self._model
 
         if self._mock:
-            return self._mock_chat(messages, use_model, temperature, max_tokens)
+            return self._mock_chat(
+                messages, use_model, temperature, max_tokens, tools=tools
+            )
 
         # 构建请求体
         api_kwargs: Dict[str, Any] = {
@@ -192,6 +229,11 @@ class LLMClient:
         }
         if response_format:
             api_kwargs["response_format"] = response_format
+        if tools:
+            api_kwargs["tools"] = tools
+            # tool_choice 默认为 "auto"，仅在显式传入时设置
+            if tool_choice is not None:
+                api_kwargs["tool_choice"] = tool_choice
         api_kwargs.update(kwargs)
 
         # 按后端分发
@@ -202,7 +244,9 @@ class LLMClient:
                 return self._chat_via_httpx(api_kwargs)
             else:
                 # 不应到达此处
-                return self._mock_chat(messages, use_model, temperature, max_tokens)
+                return self._mock_chat(
+                    messages, use_model, temperature, max_tokens, tools=tools
+                )
         except Exception as e:
             logger.error(f"LLM 调用失败: {e}", exc_info=True)
             raise
@@ -210,8 +254,26 @@ class LLMClient:
     def _chat_via_sdk(self, api_kwargs: Dict[str, Any]) -> LLMResponse:
         """通过 openai SDK 调用"""
         response = self._sdk_client.chat.completions.create(**api_kwargs)
+        choice = response.choices[0]
+        message = choice.message
+
+        # 提取 tool_calls（SDK 对象需转为可序列化 dict）
+        tool_calls: List[Dict[str, Any]] = []
+        if message.tool_calls:
+            for tc in message.tool_calls:
+                tool_calls.append(
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                )
+
         return LLMResponse(
-            content=response.choices[0].message.content,
+            content=message.content or "",
             model=response.model,
             usage={
                 "prompt_tokens": response.usage.prompt_tokens,
@@ -219,6 +281,8 @@ class LLMClient:
                 "total_tokens": response.usage.total_tokens,
             },
             raw=response,
+            tool_calls=tool_calls,
+            finish_reason=choice.finish_reason or "",
         )
 
     def _chat_via_httpx(self, api_kwargs: Dict[str, Any]) -> LLMResponse:
@@ -233,8 +297,14 @@ class LLMClient:
         resp.raise_for_status()
         data = resp.json()
 
+        choice = data["choices"][0]
+        message = choice.get("message", {})
+
+        # 提取 tool_calls（OpenAI 兼容格式，直接透传 dict）
+        tool_calls: List[Dict[str, Any]] = message.get("tool_calls") or []
+
         return LLMResponse(
-            content=data["choices"][0]["message"]["content"],
+            content=message.get("content") or "",
             model=data.get("model", api_kwargs["model"]),
             usage={
                 "prompt_tokens": data.get("usage", {}).get("prompt_tokens", 0),
@@ -242,6 +312,8 @@ class LLMClient:
                 "total_tokens": data.get("usage", {}).get("total_tokens", 0),
             },
             raw=data,
+            tool_calls=tool_calls,
+            finish_reason=choice.get("finish_reason", "") or "",
         )
 
     def chat_json(
@@ -291,6 +363,42 @@ class LLMClient:
             else:
                 raise ValueError(f"无法解析 LLM 响应为 JSON: {response.content[:200]}")
 
+    def chat_with_tools(
+        self,
+        messages: List[LLMMessage],
+        tools: List[Dict[str, Any]],
+        tool_choice: Any = "auto",
+        model: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 2048,
+    ) -> LLMResponse:
+        """
+        带工具定义的聊天调用（单轮，不含循环）
+
+        向 LLM 传入可用工具定义，返回可能包含 tool_calls 的响应。
+        工具执行与多轮循环由调用方负责处理。
+
+        Args:
+            messages: 消息列表（含历史上下文）
+            tools: 可用工具定义列表（OpenAI Function Calling 格式）
+            tool_choice: 工具选择策略，默认 "auto"
+            model: 模型名称，None 时使用默认模型
+            temperature: 温度参数
+            max_tokens: 最大生成 token 数
+
+        Returns:
+            LLMResponse，检查 has_tool_calls 判断是否需要执行工具；
+            若 has_tool_calls 为 True，则 tool_calls 字段包含调用详情。
+        """
+        return self.chat(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+
     # ============================================================
     # Mock 实现
     # ============================================================
@@ -301,8 +409,13 @@ class LLMClient:
         model: str,
         temperature: float,
         max_tokens: int,
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> LLMResponse:
-        """Mock 聊天 — 基于消息内容返回预设响应"""
+        """Mock 聊天 — 基于消息内容返回预设响应
+
+        当传入 tools 时，模拟一次工具调用并返回 tool_calls 响应，
+        便于在没有真实 API 的环境下测试 Function Calling 流程。
+        """
 
         # 提取用户最后一条消息
         user_content = ""
@@ -312,6 +425,26 @@ class LLMClient:
                 user_content = msg.content
             elif msg.role == "system":
                 system_content = msg.content
+
+        # ── 工具调用模拟分支 ──
+        # 当传入工具定义，且系统提示或用户消息暗示需要调用工具时，
+        # 返回模拟的 tool_calls 响应（finish_reason="tool_calls"）
+        if tools:
+            tool_call = self._mock_tool_call(tools, user_content, system_content)
+            if tool_call is not None:
+                mock_content = ""
+                usage = {
+                    "prompt_tokens": len(user_content) // 4 + 10,
+                    "completion_tokens": 20,
+                    "total_tokens": len(user_content) // 4 + 30,
+                }
+                return LLMResponse(
+                    content=mock_content,
+                    model=f"{model} (mock)",
+                    usage=usage,
+                    tool_calls=[tool_call],
+                    finish_reason="tool_calls",
+                )
 
         # 根据系统提示判断任务类型
         if "改写" in system_content or "rewrite" in system_content.lower():
@@ -330,6 +463,61 @@ class LLMClient:
                 "total_tokens": (len(user_content) + len(mock_content)) // 4 + 20,
             },
         )
+
+    def _mock_tool_call(
+        self,
+        tools: List[Dict[str, Any]],
+        user_content: str,
+        system_content: str,
+    ) -> Optional[Dict[str, Any]]:
+        """构造模拟的 tool_call 响应
+
+        选取第一个工具进行调用，arguments 基于用户输入构造。
+        若工具列表为空则返回 None。
+
+        Returns:
+            OpenAI 兼容的 tool_call dict，或 None
+        """
+        if not tools:
+            return None
+
+        # 取第一个工具定义
+        first_tool = tools[0]
+        func = first_tool.get("function", {})
+        func_name = func.get("name", "unknown_tool")
+
+        # 基于 parameters 构造参数（尽可能填充用户输入）
+        parameters = func.get("parameters", {})
+        props = parameters.get("properties", {})
+        required = parameters.get("required", [])
+
+        args: Dict[str, Any] = {}
+        for param_name in required:
+            param_schema = props.get(param_name, {})
+            param_type = param_schema.get("type", "string")
+            if param_type == "string":
+                args[param_name] = user_content[:200] if user_content else "mock_value"
+            elif param_type == "integer":
+                args[param_name] = 1
+            elif param_type == "number":
+                args[param_name] = 1.0
+            elif param_type == "boolean":
+                args[param_name] = True
+            elif param_type == "array":
+                args[param_name] = []
+            elif param_type == "object":
+                args[param_name] = {}
+            else:
+                args[param_name] = "mock_value"
+
+        return {
+            "id": "call_mock_0001",
+            "type": "function",
+            "function": {
+                "name": func_name,
+                "arguments": json.dumps(args, ensure_ascii=False),
+            },
+        }
 
     def _mock_rewrite(self, user_content: str, system_content: str) -> str:
         """Mock 查询改写"""

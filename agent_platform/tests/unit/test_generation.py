@@ -276,8 +276,8 @@ class TestCitationFormatter:
         result = fmt.format_citation_list([ev1, ev2])
 
         assert len(result) == 2
-        assert result[0]["index"] == 1
-        assert result[1]["index"] == 2
+        assert result[0]["index"] == "1"
+        assert result[1]["index"] == "2"
         assert result[0]["citation"] == "《商业银行资本管理办法》第43条"
         assert result[1]["citation"] == "《商业银行杠杆率管理办法》第8条"
         assert result[0]["source_doc"] == "商业银行资本管理办法"
@@ -301,7 +301,7 @@ class TestCitationFormatter:
 
         # 相同引用去重，只保留一条
         assert len(result) == 1
-        assert result[0]["index"] == 1
+        assert result[0]["index"] == "1"
 
     def test_inline_citation(self):
         """行内引用标记"""

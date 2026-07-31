@@ -48,7 +48,8 @@ from .siliconflow_client import SiliconFlowReranker, SiliconFlowEmbedding
 # v3_api_embed: 切换到硅基流动 API 嵌入（向量维度 512 → 1024）
 # v4_fts5: ExactRetriever 改为 DB/FTS5 驱动
 # v5_metadata_sql: MetadataRetriever 改为 SQL WHERE 驱动，消除 _records 内存存储
-CACHE_VERSION = "v5_metadata_sql"
+# v6_db_fingerprint: 指纹机制改造，JSONL 缺失时基于 DB 内容恢复缓存，不再常驻依赖 JSONL
+CACHE_VERSION = "v6_db_fingerprint"
 
 
 class RetrievalAPI:
@@ -166,15 +167,30 @@ class RetrievalAPI:
         print("=" * 60)
 
         # ── 计算数据指纹（用于判断缓存是否有效）──
-        # 先快速扫描文件列表计算文件级 hash（不读内容，速度快）
+        # 优先用 JSONL 文件指纹（能检测数据更新）；
+        # JSONL 不存在时回退到 DB 指纹（chunk 数量 + DB 文件修改时间），从已有 manifest 恢复。
         jsonl_files = sorted(
             list(source_path.glob("*.jsonl")) if source_path.is_dir()
-            else [source_path]
+            else ([source_path] if source_path.exists() else [])
         )
-        file_sig = "|".join(f"{f.name}:{f.stat().st_size}:{int(f.stat().st_mtime)}" for f in jsonl_files)
-        data_hash = hashlib.sha256(file_sig.encode()).hexdigest()[:16]
 
-        manifest_path = cache_dir / f"manifest_{data_hash}.json"
+        if jsonl_files:
+            # 有 JSONL 文件：用文件级指纹（文件名 + 大小 + 修改时间）
+            file_sig = "|".join(f"{f.name}:{f.stat().st_size}:{int(f.stat().st_mtime)}" for f in jsonl_files)
+            data_hash = hashlib.sha256(file_sig.encode()).hexdigest()[:16]
+            manifest_path = cache_dir / f"manifest_{data_hash}.json"
+            print(f"  [数据指纹] 基于 {len(jsonl_files)} 个 JSONL 文件: {data_hash}")
+        else:
+            # 无 JSONL 文件：从 .cache 中已有的 manifest 恢复（基于 DB 内容）
+            data_hash = None
+            manifest_path = self._find_latest_manifest(cache_dir)
+            if manifest_path:
+                # 从 manifest 文件名提取 data_hash
+                data_hash = manifest_path.stem.replace("manifest_", "")
+                print(f"  [数据指纹] JSONL 不存在，从缓存 manifest 恢复: {data_hash}")
+            else:
+                manifest_path = cache_dir / "manifest_none.json"
+                print(f"  [数据指纹] 无 JSONL 文件且无缓存 manifest，无法启动")
 
         # ════════════════════════════════════════════════════════
         # 快速路径：缓存命中，全部从磁盘加载
@@ -203,6 +219,10 @@ class RetrievalAPI:
         chunks = load_json_chunks(source)
         if not chunks:
             print("[警告] 未找到任何 chunk")
+            if not jsonl_files:
+                print("  原因：数据目录下无 JSONL 文件，且无可用缓存。")
+                print("  解决：将 *_chunks.jsonl 文件放入数据目录后重启服务。")
+                print(f"  数据目录: {source_path}")
             return self
         chunk_ids = [c.chunk_id for c in chunks]
         doc_texts = [c.content for c in chunks]
@@ -330,6 +350,28 @@ class RetrievalAPI:
         with open(cache_dir / f"manifest_{data_hash}.json", "w") as f:
             json.dump(manifest, f, indent=2)
         print(f"  [持久化完成] manifest_{data_hash}.json")
+
+    def _find_latest_manifest(self, cache_dir: Path) -> Optional[Path]:
+        """
+        在缓存目录中查找最新的有效 manifest。
+
+        用于 JSONL 文件不存在时，从已有缓存恢复。
+        筛选条件：cache_version 匹配当前版本，按修改时间取最新。
+        """
+        manifests = sorted(
+            cache_dir.glob("manifest_*.json"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        for mf in manifests:
+            try:
+                with open(mf) as f:
+                    manifest = json.load(f)
+                if manifest.get("cache_version") == CACHE_VERSION:
+                    return mf
+            except (json.JSONDecodeError, OSError):
+                continue
+        return None
 
     def _load_from_cache(self, cache_dir: Path, data_hash: str, populate_db: bool) -> bool:
         """从缓存加载全部索引，成功返回 True"""

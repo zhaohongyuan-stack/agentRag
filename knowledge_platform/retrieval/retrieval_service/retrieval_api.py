@@ -349,7 +349,29 @@ class RetrievalAPI:
             }
             filters_applied = dict(req.filters)
             if not allowed:
-                return []
+                # 渐进式回退：逐步去掉过滤条件直到命中（避免元数据过滤过严导致 0 命中空拒答）
+                # 第1步：去掉 doc_name 重试
+                _fallback_to_full = False
+                if "doc_name" in req.filters:
+                    relaxed_filters = {k: v for k, v in req.filters.items() if k != "doc_name"}
+                    if relaxed_filters:
+                        print(f"  [Phase 0] doc_name 过滤无匹配，回退去掉doc_name重试 filters={relaxed_filters}")
+                        allowed = {
+                            self._chunks.index(r) for r in self.metadata.search(relaxed_filters, limit=999999)
+                            if r in self._chunks
+                        }
+                        filters_applied = dict(relaxed_filters)
+                    else:
+                        _fallback_to_full = True
+                        filters_applied = {}
+                        print(f"  [Phase 0] doc_name 过滤无匹配，回退全库检索 ({len(self._chunks)} chunks)")
+                # 第2步：去掉 doc_name 后仍无匹配，去掉所有过滤条件 → 全库检索
+                if not _fallback_to_full and not allowed:
+                    print(f"  [Phase 0] 所有过滤条件均无匹配，回退全库检索 ({len(self._chunks)} chunks)")
+                    _fallback_to_full = True
+                    filters_applied = {}
+                if _fallback_to_full:
+                    allowed = None  # 全库检索（下游 allowed is None 即不过滤）
 
         # ── Phase 1: 按策略检索 ──
         strategy = req.strategy

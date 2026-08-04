@@ -525,7 +525,8 @@ class RetrievalAPI:
             )
             filters_applied = dict(req.filters)
             if not allowed:
-                # 回退策略：doc_name 过滤失败时，去掉 doc_name 重试
+                # 渐进式回退：逐步去掉过滤条件直到命中
+                # 第1步：去掉 doc_name
                 _fallback_to_full = False
                 if "doc_name" in req.filters:
                     relaxed_filters = {k: v for k, v in req.filters.items() if k != "doc_name"}
@@ -539,6 +540,12 @@ class RetrievalAPI:
                         _fallback_to_full = True
                         filters_applied = {}
                         print(f"  [Phase 0] doc_name 过滤无匹配，回退全库检索 ({self._store.chunk_count} chunks)")
+                # 第2步：去掉 doc_name 后仍无匹配，去掉所有过滤条件
+                if not _fallback_to_full and not allowed:
+                    print(f"  [Phase 0] 所有过滤条件均无匹配，回退全库检索 ({self._store.chunk_count} chunks)")
+                    _fallback_to_full = True
+                    filters_applied = {}
+                    allowed = None
                 if not _fallback_to_full and not allowed:
                     print(f"  [Phase 0] 过滤后无匹配 chunk，返回空结果  ({_time.time() - _t_p0:.3f}s)")
                     return []

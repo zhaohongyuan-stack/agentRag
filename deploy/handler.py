@@ -426,6 +426,24 @@ class RequestHandler:
                 )
                 logger.info(f"[步骤] 检索完成 → {retrieval_result.hit_count} hits, {retrieval_result.latency_ms:.0f}ms")
 
+            # ── 语义检索兜底：检索成功但证据为0时（通常因元数据过滤过严），
+            #    去掉所有过滤条件重试，确保语义检索执行，避免7ms级快速空拒答 ──
+            if retrieval_result.success and retrieval_result.hit_count == 0:
+                original_filters = filters
+                logger.info(
+                    f"[步骤] 首次检索证据不足 (hits=0, filters={original_filters or '无'})，触发无过滤语义检索兜底"
+                )
+                _step_t = _now_ms()
+                retrieval_result = self._retrieval_client.search_by_spec(
+                    query_text=search_query,
+                    route_decision=route_decision,
+                    filters={},  # 去掉所有过滤条件，强制走全库语义检索
+                )
+                logger.info(
+                    f"[步骤] 无过滤语义检索兜底完成 → {retrieval_result.hit_count} hits, "
+                    f"{retrieval_result.latency_ms:.0f}ms (总 {_now_ms() - _step_t:.0f}ms)"
+                )
+
             # 检索失败处理
             if not retrieval_result.success:
                 logger.warning(f"检索失败: {retrieval_result.error_code} - {retrieval_result.error}")

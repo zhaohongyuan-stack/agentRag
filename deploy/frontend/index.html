@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACE-RAG | 智能监管知识问答</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'PingFang SC','Microsoft YaHei',sans-serif;background:#f0f2f5;color:#333;height:100vh;display:flex;overflow:hidden}
+/* 侧边栏 */
+.sidebar{width:260px;background:linear-gradient(180deg,#1a1a2e,#16213e);color:#fff;display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:20px;text-align:center;border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar-header .logo{font-size:28px;margin-bottom:4px}
+.sidebar-header h1{font-size:18px;font-weight:600}
+.sidebar-header p{font-size:12px;color:#aaa;margin-top:4px}
+.sidebar-status{padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:8px;font-size:13px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80}
+.status-dot.offline{background:#f87171;box-shadow:0 0 6px #f87171}
+.sidebar-section{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar-section h3{font-size:13px;color:#888;text-transform:uppercase;margin-bottom:10px;letter-spacing:1px}
+.btn-new-chat{width:100%;padding:10px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:8px;cursor:pointer;font-size:14px;transition:background .2s}
+.btn-new-chat:hover{background:rgba(255,255,255,.2)}
+.session-list{flex:1;overflow-y:auto;padding:8px 0}
+.session-item{padding:10px 20px;font-size:13px;cursor:pointer;transition:background .2s;display:flex;align-items:center;gap:8px}
+.session-item:hover{background:rgba(255,255,255,.05)}
+.session-item.active{background:rgba(255,255,255,.1)}
+.sidebar-stats{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1)}
+.stat-item{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.stat-item .label{color:#888}
+.stat-item .value{color:#4ade80;font-weight:600}
+/* 主区域 */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-header{padding:16px 24px;background:#fff;border-bottom:1px solid #e8e8e8;flex-shrink:0}
+.main-header h2{font-size:18px;font-weight:600;color:#1a1a2e}
+.main-header p{font-size:13px;color:#888;margin-top:4px}
+.chat-area{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
+.message{max-width:80%;padding:14px 18px;border-radius:12px;font-size:14px;line-height:1.7;word-wrap:break-word}
+.message.user{align-self:flex-end;background:#1677ff;color:#fff}
+.message.assistant{align-self:flex-start;background:#fff;border:1px solid #e8e8e8;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.message.assistant .sources{margin-top:12px;padding-top:10px;border-top:1px solid #eee}
+.message.assistant .sources h4{font-size:12px;color:#888;margin-bottom:6px}
+.message.assistant .source-item{font-size:12px;color:#1677ff;margin-bottom:3px;cursor:pointer}
+.message.assistant .source-item:hover{text-decoration:underline}
+.message.system{align-self:center;background:#fff7e6;border:1px solid #ffd591;color:#d46b08;font-size:13px}
+.examples{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:680px;margin:auto}
+.example-card{background:#fff;border:1px solid #e8e8e8;border-radius:10px;padding:16px;cursor:pointer;transition:all .2s}
+.example-card:hover{border-color:#1677ff;box-shadow:0 2px 8px rgba(22,119,255,.15)}
+.example-card .tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:4px;background:#e6f4ff;color:#1677ff;margin-bottom:8px}
+.example-card .text{font-size:14px;color:#333;line-height:1.5}
+/* 输入区 */
+.input-area{padding:16px 24px;background:#fff;border-top:1px solid #e8e8e8;flex-shrink:0}
+.input-wrapper{display:flex;gap:12px;align-items:flex-end}
+.input-wrapper textarea{flex:1;padding:12px 16px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;resize:none;height:48px;max-height:120px;line-height:1.5;font-family:inherit;transition:border-color .2s}
+.input-wrapper textarea:focus{outline:none;border-color:#1677ff;box-shadow:0 0 0 2px rgba(22,119,255,.1)}
+.btn-send{padding:12px 24px;background:#1677ff;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:background .2s;white-space:nowrap}
+.btn-send:hover{background:#0958d9}
+.btn-send:disabled{background:#d9d9d9;cursor:not-allowed}
+/* 流程监控 */
+.process-panel{width:320px;background:#1e1e2e;color:#d4d4d4;display:flex;flex-direction:column;flex-shrink:0;font-family:'Fira Code','Consolas',monospace}
+.process-panel .tabs{display:flex;border-bottom:1px solid #333}
+.process-panel .tab{flex:1;padding:10px;text-align:center;font-size:13px;cursor:pointer;color:#888;border-bottom:2px solid transparent}
+.process-panel .tab.active{color:#4ade80;border-bottom-color:#4ade80}
+.process-content{flex:1;overflow-y:auto;padding:12px}
+.process-step{padding:6px 0;font-size:12px;line-height:1.6;border-bottom:1px solid #333}
+.process-step .step-name{color:#61afef}
+.process-step .step-value{color:#e5c07b}
+.process-step .step-status{float:right}
+.process-step .status-ok{color:#4ade80}
+.process-step .status-warn{color:#e5c07b}
+.process-step .status-fail{color:#f87171}
+.log-line{font-size:11px;color:#888;padding:2px 0}
+.empty-hint{text-align:center;padding:40px 20px;color:#555;font-size:13px}
+/* 加载动画 */
+.loading-dots{display:inline-flex;gap:4px;align-items:center}
+.loading-dots span{width:6px;height:6px;border-radius:50%;background:#1677ff;animation:bounce 1.4s infinite ease-in-out}
+.loading-dots span:nth-child(2){animation-delay:.16s}
+.loading-dots span:nth-child(3){animation-delay:.32s}
+@keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+/* 滚动条 */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:3px}
+.chat-area::-webkit-scrollbar-thumb{background:#d9d9d9}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">🦞</div>
+    <h1>ACE-RAG</h1>
+    <p>智能监管知识问答</p>
+  </div>
+  <div class="sidebar-status">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">检测中...</span>
+    <span style="margin-left:auto;font-size:12px;color:#888" id="diagBtn" title="诊断">🔧</span>
+  </div>
+  <div class="sidebar-section">
+    <h3>会话历史</h3>
+    <button class="btn-new-chat" onclick="newChat()">+ 新对话</button>
+  </div>
+  <div class="session-list" id="sessionList">
+    <div class="session-item" style="color:#666">💬 暂无会话</div>
+  </div>
+  <div class="sidebar-stats">
+    <div class="stat-item"><span class="label">知识库文档</span><span class="value" id="docCount">-</span></div>
+    <div class="stat-item"><span class="label">文本分块</span><span class="value" id="chunkCount">-</span></div>
+    <div class="stat-item"><span class="label">服务状态</span><span class="value" id="svcStatus">检测中</span></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="main-header">
+    <h2>🦞 ACE-RAG 智能监管知识问答</h2>
+    <p>基于自适应编译式证据检索的监管知识问答系统，覆盖保险、银行等金融监管领域。</p>
+  </div>
+  <div class="chat-area" id="chatArea">
+    <div class="examples" id="examples">
+      <div class="example-card" onclick="askExample('保险公司核心一级资本充足率不得低于多少？')">
+        <span class="tag">监管要求</span>
+        <div class="text">保险公司核心一级资本充足率不得低于多少？</div>
+      </div>
+      <div class="example-card" onclick="askExample('2023年4季度保险资金运用余额是多少？')">
+        <span class="tag">数据查询</span>
+        <div class="text">2023年4季度保险资金运用余额是多少？</div>
+      </div>
+      <div class="example-card" onclick="askExample('商业银行资本管理办法对资本充足率有哪些要求？')">
+        <span class="tag">法规查询</span>
+        <div class="text">商业银行资本管理办法对资本充足率有哪些要求？</div>
+      </div>
+      <div class="example-card" onclick="askExample('寿险合同负债评估中计算现金流现值所采用的折现率曲线由基础利率曲线加综合溢价形成。准确吗')">
+        <span class="tag">智能问答</span>
+        <div class="text">直接检索</div>
+      </div>
+    </div>
+  </div>
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea id="inputBox" placeholder="输入您的问题..." onkeydown="handleKey(event)"></textarea>
+      <button class="btn-send" id="sendBtn" onclick="sendQuery()">发送 →</button>
+    </div>
+  </div>
+</div>
+
+<div class="process-panel">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('process')">流程</div>
+    <div class="tab" onclick="switchTab('log')">日志</div>
+    <div class="tab" onclick="switchTab('status')">状态</div>
+  </div>
+  <div class="process-content" id="processContent">
+    <div class="empty-hint">📋<br>发送问题后，这里将显示<br>完整的处理流程</div>
+  </div>
+</div>
+
+<script>
+let currentSession=null,isLoading=false;
+
+async function api(path,opts){
+  const r=await fetch(path,opts);
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+async function checkHealth(){
+  try{
+    const[agent,ret]=await Promise.all([
+      api('/api/agent/health').catch(()=>null),
+      api('/api/retrieval/health').catch(()=>null)
+    ]);
+    const ok=agent&&agent.status==='ok'&&ret&&ret.status==='ok';
+    document.getElementById('statusDot').className='status-dot'+(ok?'':' offline');
+    document.getElementById('statusText').textContent=ok?'服务正常':'服务异常';
+    document.getElementById('svcStatus').textContent=ok?'运行中':'异常';
+    if(ret){document.getElementById('docCount').textContent=ret.docs+' 篇';document.getElementById('chunkCount').textContent=ret.chunks+' 块';}
+  }catch(e){
+    document.getElementById('statusDot').className='status-dot offline';
+    document.getElementById('statusText').textContent='连接失败';
+    document.getElementById('svcStatus').textContent='离线';
+  }
+}
+
+function newChat(){
+  currentSession=null;
+  document.getElementById('chatArea').innerHTML='<div class="examples" id="examples">'+document.getElementById('examples').outerHTML.replace('id="examples"','')+'</div>';
+  // Re-bind examples
+  document.querySelectorAll('.example-card').forEach((c,i)=>{
+    const texts=['保险公司核心一级资本充足率不得低于多少？','2023年4季度保险资金运用余额是多少？','商业银行资本管理办法对资本充足率有哪些要求？','寿险合同负债评估中计算现金流现值所采用的折现率曲线由基础利率曲线加综合溢价形成。准确吗'];
+    c.onclick=()=>askExample(texts[i]);
+  });
+  document.getElementById('processContent').innerHTML='<div class="empty-hint">📋<br>发送问题后，这里将显示<br>完整的处理流程</div>';
+}
+
+function askExample(q){
+  document.getElementById('inputBox').value=q;
+  sendQuery();
+}
+
+function handleKey(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendQuery();}
+}
+
+function addMsg(role,text){
+  const area=document.getElementById('chatArea');
+  const examples=document.getElementById('examples');
+  if(examples)examples.remove();
+  const div=document.createElement('div');
+  div.className='message '+role;
+  div.innerHTML=text;
+  area.appendChild(div);
+  area.scrollTop=area.scrollHeight;
+  return div;
+}
+
+async function sendQuery(){
+  const q=document.getElementById('inputBox').value.trim();
+  if(!q||isLoading)return;
+  isLoading=true;
+  document.getElementById('sendBtn').disabled=true;
+  document.getElementById('inputBox').value='';
+  // 用户消息
+  addMsg('user',escapeHtml(q));
+  // 加载中
+  const loadingDiv=addMsg('assistant','<div class="loading-dots"><span></span><span></span><span></span></div>');
+  // 清空流程面板
+  const pc=document.getElementById('processContent');
+  pc.innerHTML='';
+  try{
+    const body={query:q};
+    if(currentSession)body.session_id=currentSession;
+    const t0=Date.now();
+    const r=await api('/api/agent/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const elapsed=((Date.now()-t0)/1000).toFixed(1);
+    loadingDiv.remove();
+    // 构建回答
+    let html='<p>'+escapeHtml(r.answer||'无回答')+'</p>';
+    if(r.latency_ms)html+='<p style="margin-top:8px;font-size:12px;color:#999">耗时:'+(r.latency_ms/1000).toFixed(1)+'s | 证据:'+ (r.evidence_count||0)+'条 | 充分性:'+ ((r.sufficiency_score||0)).toFixed(2) +' | 置信度:'+ ((r.confidence||0)).toFixed(2) +'</p>';
+    // 来源引用
+    if(r.citations&&r.citations.length>0){
+      html+='<div class="sources"><h4>📚 来源引用</h4>';
+      r.citations.forEach((c,i)=>{
+        html+='<div class="source-item">['+(i+1)+'] '+escapeHtml(c.doc_name||c.title||'')+(c.clause_number?' '+escapeHtml(c.clause_number):'')+(c.page?' Page='+c.page:'')+'</div>';
+      });
+      html+='</div>';
+    }
+    // 证据片段
+    if(r.evidence_bundle&&r.evidence_bundle.hits){
+      const hits=r.evidence_bundle.hits.slice(0,3);
+      if(hits.length>0){
+        html+='<div class="sources"><h4>🔎 证据片段</h4>';
+        hits.forEach((h,i)=>{
+          html+='<div style="font-size:12px;color:#666;margin-bottom:4px;padding:4px;background:#f5f5f5;border-radius:4px">['+(i+1)+'] '+escapeHtml((h.content||h.evidence_snippet||'').substring(0,120))+'...</div>';
+        });
+        html+='</div>';
+      }
+    }
+    addMsg('assistant',html);
+    if(r.session_id)currentSession=r.session_id;
+    // 流程面板
+    showProcess(r,elapsed);
+  }catch(e){
+    loadingDiv.remove();
+    addMsg('system','⚠️ 请求失败: '+e.message);
+  }finally{
+    isLoading=false;
+    document.getElementById('sendBtn').disabled=false;
+  }
+}
+
+function showProcess(r,elapsed){
+  const pc=document.getElementById('processContent');
+  let html='';
+  const trace=r.state_trace||[];
+  if(trace.length>0){
+    trace.forEach(s=>{
+      const parts=String(s).split(/[:：]/);
+      const name=parts[0]||s;
+      const status=parts.length>1?parts.slice(1).join(':'):'';
+      html+='<div class="process-step"><span class="step-name">'+escapeHtml(name)+'</span><span class="step-status status-ok">✓</span><br><span class="step-value">'+escapeHtml(status)+'</span></div>';
+    });
+  }
+  html+='<div class="process-step"><span class="step-name">总耗时</span><span class="step-value" style="float:right">'+elapsed+'s</span></div>';
+  html+='<div class="process-step"><span class="step-name">意图</span><span class="step-value">'+escapeHtml(r.intent||'-')+'</span></div>';
+  html+='<div class="process-step"><span class="step-name">复杂度</span><span class="step-value">'+escapeHtml(r.complexity||'-')+'</span></div>';
+  html+='<div class="process-step"><span class="step-name">证据数</span><span class="step-value">'+(r.evidence_count||0)+'</span></div>';
+  html+='<div class="process-step"><span class="step-name">充分性</span><span class="step-value">'+((r.sufficiency_score||0)).toFixed(2)+'</span></div>';
+  html+='<div class="process-step"><span class="step-name">置信度</span><span class="step-value">'+((r.confidence||0)).toFixed(2)+'</span></div>';
+  html+='<div class="process-step"><span class="step-name">拒答</span><span class="step-value">'+(r.is_refusal?'是':'否')+'</span></div>';
+  pc.innerHTML=html;
+}
+
+function switchTab(tab){
+  document.querySelectorAll('.process-panel .tab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  // 简化：都显示流程
+}
+
+function escapeHtml(s){
+  if(!s)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+checkHealth();
+setInterval(checkHealth,30000);
+</script>
+</body>
+</html>

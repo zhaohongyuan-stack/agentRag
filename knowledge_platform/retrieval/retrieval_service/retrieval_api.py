@@ -512,9 +512,12 @@ class RetrievalAPI:
 
         # ── Phase 0: 元数据过滤 ──
         # metadata.search() 返回 chunk_id 列表，转换为 doc_idx 集合供检索器过滤
+        # 注意：TABLE/RELATION 策略走结构化检索器，有自己的过滤逻辑，
+        # 不应在此处用 metadata 字段做前置过滤（如 table_name/pattern 等不是通用 metadata 字段）
         allowed: Optional[set] = None
         filters_applied: Dict[str, Any] = {}
-        if req.filters and self.metadata:
+        _skip_phase0 = req.strategy in (RetrievalStrategy.TABLE, RetrievalStrategy.RELATION)
+        if req.filters and self.metadata and not _skip_phase0:
             _t_p0 = _time.time()
             print(f"  [Phase 0] 元数据过滤 ...  filters={req.filters}")
             allowed = self.metadata.get_allowed_indices(
@@ -526,6 +529,8 @@ class RetrievalAPI:
                 return []
             print(f"  [Phase 0] 过滤后允许 {len(allowed)} / {self._store.chunk_count} chunks  "
                   f"({_time.time() - _t_p0:.3f}s)")
+        elif _skip_phase0:
+            print(f"  [Phase 0] 跳过元数据过滤（策略={req.strategy.value}，由结构化检索器自行处理）")
         else:
             print(f"  [Phase 0] 无元数据过滤，全库检索 ({self._store.chunk_count} chunks)")
 
@@ -838,9 +843,80 @@ class RetrievalAPI:
             results = self.search_chunks(**req.filters, limit=req.top_k) if self.relation else []
         elif req.strategy == RetrievalStrategy.TABLE:
             table_name = req.filters.get("table_name", "")
-            pattern = req.query or req.filters.get("pattern", "")
+            doc_name = req.filters.get("doc_name", "")
+            pattern = req.filters.get("pattern", req.query)
             col_name = req.filters.get("col_name")
-            results = self.table.find_rows(table_name, pattern, col_name) if self.table else []
+            resolved = self._resolve_table_name(table_name) if table_name else None
+
+            # ── TABLE 策略跳过了 Phase 0 元数据过滤。
+            #     通过 doc_name 限定回退搜索范围，避免跨文档混入无关结果。
+            #     注意：无论表名解析成功与否都应计算，因为 find_rows 可能无结果
+            #     （如 pattern 含多个指标名无法匹配单行），此时会回退到 BM25，
+            #     BM25 若不加 doc_name 过滤则会返回所有文档的结果。──
+            _doc_allowed: Optional[set] = None
+            if doc_name and self.metadata:
+                _doc_allowed = self.metadata.get_allowed_indices(
+                    {"doc_name": doc_name}, self._store.chunk_ids
+                )
+
+            if resolved:
+                print(f"    [Table] 匹配表名: '{resolved}', pattern='{pattern}'")
+                row_hits = self.table.find_rows(resolved, pattern, col_name) if self.table else []
+                # 将 table row 结果转换为标准 chunk dict 格式
+                results = self._table_rows_to_results(resolved, row_hits)
+            elif table_name:
+                # 当 table_name 无法解析时，限定搜索范围到 doc_name 对应的表
+                if _doc_allowed and self.table:
+                    allowed_chunk_ids = {self._store.get_chunk_id(i) for i in _doc_allowed}
+                    tables_to_search = []
+                    for tname in self.table.list_tables():
+                        table_chunks = set(self.table._tables.get(tname, {}).get("chunks", []))
+                        if table_chunks & allowed_chunk_ids:
+                            tables_to_search.append(tname)
+                    print(f"    [Table] 表名 '{table_name}' 未匹配，限定搜索 {len(tables_to_search)} 个表（doc: {doc_name}）")
+                else:
+                    tables_to_search = self.table.list_tables() if self.table else []
+                    print(f"    [Table] 表名 '{table_name}' 未匹配，遍历全部 {len(tables_to_search)} 个表搜索 pattern='{pattern}'")
+                results = []
+                for tname in tables_to_search:
+                    row_hits = self.table.find_rows(tname, pattern, col_name)
+                    results.extend(self._table_rows_to_results(tname, row_hits))
+            else:
+                results = []
+
+            # 双路补充搜索：BM25 + Dense → RRF 融合，获取 cell_fact 等 narrative chunk。
+            # 纯 BM25 会因文档长度惩罚（b=0.75）系统性降低 "2023年_一季度" 类
+            # cell_fact 的得分（比 "二季度/三季度/四季度" 多 "2023年_" 前缀），
+            # Dense 向量语义检索不受文档长度影响，可救援此类被 BM25 截断的 chunk。
+            if pattern and self.lexical:
+                bm25_k = max(req.top_k * 3, 50)
+                bm25_raw = self.lexical.search(pattern, top_k=bm25_k, raw=True)
+
+                if self.dense:
+                    dense_raw = self.dense.search(pattern, top_k=bm25_k, raw=True)
+                    # 简易 RRF 融合（k=60，与 HYBRID 策略一致）
+                    rrf: Dict[int, float] = {}
+                    for rank, (idx, _) in enumerate(bm25_raw):
+                        rrf[idx] = rrf.get(idx, 0) + 1.0 / (60 + rank + 1)
+                    for rank, (idx, _) in enumerate(dense_raw):
+                        rrf[idx] = rrf.get(idx, 0) + 1.0 / (60 + rank + 1)
+                    raw = sorted(rrf.items(), key=lambda x: x[1], reverse=True)[:bm25_k]
+                else:
+                    raw = bm25_raw
+
+                # TABLE 策略跳过了 Phase 0，此处按 doc_name 限定回退范围
+                if _doc_allowed:
+                    raw = [(idx, score) for idx, score in raw if idx in _doc_allowed]
+                bm25_results = self._lexical_raw_to_results(raw)
+                if results:
+                    # 合并：table 结果前置，BM25 narrative 结果补充
+                    existing_ids = {r.get("chunk_id", "") for r in results}
+                    new_bm25 = [r for r in bm25_results if r.get("chunk_id", "") not in existing_ids]
+                    results = results + new_bm25
+                    print(f"    [Table] 合并结果: table {len(results) - len(new_bm25)} + BM25 {len(new_bm25)} = {len(results)} 条（经 doc_name 过滤）")
+                else:
+                    results = bm25_results
+                    print(f"    [Table] BM25 补充返回 {len(results)} 条")
         else:
             return []
 
@@ -860,6 +936,36 @@ class RetrievalAPI:
                 trace=self._build_trace(req, {"filters_applied": dict(req.filters)}),
             )
             hits.append(hit)
+
+        # ── 同级展开：补入已命中 cell_fact 的同级一季度（B列）条目 ──
+        # 只展开非Q1的 cell_fact（C/D/E列等），补入其同行的B列（一季度）sibling。
+        # 不展开B列自身（避免连锁反应），不展开非一季度列（避免证据爆炸）。
+        if self.neighborhood and req.strategy == RetrievalStrategy.TABLE:
+            hit_ids = {h.chunk_id for h in hits}
+            added = 0
+            for hit in list(hits):
+                cid = hit.chunk_id
+                # 只处理非B列的 cell_fact（B列 = 一季度，无需展开）
+                if not cid or "cell_" not in cid or "_cell_B" in cid:
+                    continue
+                siblings = self.neighborhood.get_siblings(cid)
+                for sib in (siblings or []):
+                    sid = sib.get("chunk_id", "")
+                    # 只补 B列（一季度），不补其他列
+                    if sid and sid not in hit_ids and "_cell_B" in sid:
+                        sib_result = self._build_result_from_store(sid, hit.score)
+                        sib_hit = RetrievalHit.from_chunk_result(
+                            sib_result,
+                            rank=len(hits) + 1,
+                            matched_by=list(hit.matched_by) if hit.matched_by else ["table"],
+                            trace=hit.trace,
+                        )
+                        hits.append(sib_hit)
+                        hit_ids.add(sid)
+                        added += 1
+            if added:
+                print(f"    [Table] 同级展开补全 {added} 条一季度（B列）数据")
+
         return hits
 
     def _expand_context_for_hits(self, req: RetrievalRequest,
@@ -1281,6 +1387,176 @@ class RetrievalAPI:
             print(f"  [DB] 新增 {len(chunk_dicts)} 条 chunks（跳过 {skipped} 条已有）")
         else:
             print(f"  [DB] 全部 {skipped} 条 chunks 已存在，跳过写入")
+
+    def _table_rows_to_results(self, table_name: str,
+                                row_hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        将 TableRetriever.find_rows 的行结果转换为标准 chunk-like dict。
+
+        find_rows 返回: [{"row_index": 0, "row": {"列A": "值1", "列B": "值2"}}, ...]
+        转换为标准格式以便 from_chunk_result 正确处理，LLM 可直接读取。
+        """
+        if not row_hits:
+            return []
+
+        # 获取表头，拼接为上下文
+        headers = self.table.get_headers(table_name) if self.table else []
+        header_line = " | ".join(headers) if headers else ""
+
+        results = []
+        for hit in row_hits:
+            row_idx = hit.get("row_index", -1)
+            row = hit.get("row", {})
+            # 把整行格式化为可读文本
+            row_lines = [f"表名: {table_name}"]
+            if header_line:
+                row_lines.append(f"表头: {header_line}")
+            row_lines.append("---")
+            for col_name, col_val in row.items():
+                row_lines.append(f"{col_name}: {col_val}")
+            content = "\n".join(row_lines)
+
+            results.append({
+                "chunk_id": f"table_row::{table_name}::row{row_idx}",
+                "chunk_type": "table_row",
+                "doc_name": table_name,
+                "doc_title": table_name,
+                "hierarchy_path": f"{table_name} / row {row_idx + 1}",
+                "source": table_name,
+                "content": content,
+                "score": 1.0,
+                "metadata": {
+                    "table_name": table_name,
+                    "row_index": row_idx,
+                    "headers": headers,
+                },
+            })
+
+        print(f"    [Table] {table_name}: {len(results)} 行匹配")
+        return results
+
+    def _lexical_raw_to_results(self, raw: List[tuple]) -> List[Dict[str, Any]]:
+        """
+        将 BM25 原始结果 (doc_idx, score) 转换为标准 chunk-like dict。
+        用于 TABLE 策略在结构化解析失败时的回退。
+        """
+        results = []
+        for doc_idx, score in raw:
+            chunk_id = self._store.get_chunk_id(doc_idx)
+            if not chunk_id:
+                continue
+            meta = self._store.get_meta(chunk_id)
+            content = self._store.get_content(chunk_id)
+            results.append({
+                "chunk_id": chunk_id,
+                "chunk_type": meta.chunk_type if meta else "clause",
+                "doc_name": meta.doc_name if meta else "",
+                "doc_title": meta.doc_title if meta else "",
+                "hierarchy_path": meta.hierarchy_path if meta else "",
+                "source": meta.source_file if meta else "",
+                "content": content,
+                "score": float(score),
+                "metadata": meta.metadata if meta else {},
+            })
+        return results
+
+    @staticmethod
+    def _normalize_table_name(name: str) -> str:
+        """标准化表名：统一全角/半角括号、去除多余空格、标准化日期格式"""
+        import re
+        result = name.replace("（", "(").replace("）", ")").replace("　", " ").strip()
+        result = re.sub(r'\s+', ' ', result)
+        # 标准化月份格式：09月 → 9月, 01月 → 1月（便于匹配用户查询中不带前导零的写法）
+        result = re.sub(r'0(\d)月', r'\1月', result)
+        return result
+
+    def _resolve_table_name(self, query_name: str) -> Optional[str]:
+        """
+        将用户问题中的表名解析为数据库中实际存在的表名。
+
+        支持四层匹配（逐层降级）：
+          1. 精确匹配
+          2. 标准化后匹配（括号统一为半角）
+          3. 双向子串匹配
+          4. 最长公共子串匹配（处理年份前缀/后缀位置不同等情况）
+        """
+        all_tables = self.table.list_tables() if self.table else []
+
+        # 1. 精确匹配
+        if query_name in all_tables:
+            return query_name
+
+        # 2. 标准化后匹配
+        normalized_query = self._normalize_table_name(query_name)
+        normalized_map = {self._normalize_table_name(t): t for t in all_tables}
+        if normalized_query in normalized_map:
+            return normalized_map[normalized_query]
+
+        # 3. 双向子串匹配（取最接近的）
+        query_lower = normalized_query.lower()
+        best_match = None
+        best_score = 0
+        for t in all_tables:
+            t_lower = self._normalize_table_name(t).lower()
+            if query_lower in t_lower:
+                score = len(query_lower) / len(t_lower)
+                if score > best_score:
+                    best_score = score
+                    best_match = t
+            elif t_lower in query_lower:
+                score = len(t_lower) / len(query_lower)
+                if score > best_score:
+                    best_score = score
+                    best_match = t
+
+        # 4. 最长公共子串匹配
+        # 处理"2023年商业银行主要指标...(季度)" vs "商业银行主要指标...(季度)(2023年)"
+        # 这种年份位置不同但核心表名一致的情况
+        if best_score < 0.5:
+            for t in all_tables:
+                t_lower = self._normalize_table_name(t).lower()
+                lcs_len = self._longest_common_substring(query_lower, t_lower)
+                shorter_len = min(len(query_lower), len(t_lower))
+                if shorter_len > 0:
+                    score = lcs_len / shorter_len
+                    # 年份检查：若双方都包含年份且年份不同，跳过（如 2023 vs 2024）
+                    if not self._years_conflict(query_lower, t_lower):
+                        if score > best_score:
+                            best_score = score
+                            best_match = t
+
+        if best_match and best_score > 0.4:
+            return best_match
+        return None
+
+    @staticmethod
+    def _longest_common_substring(s1: str, s2: str) -> int:
+        """返回两个字符串的最长公共子串长度"""
+        if not s1 or not s2:
+            return 0
+        m, n = len(s1), len(s2)
+        # 用滚动数组降内存
+        prev = [0] * (n + 1)
+        max_len = 0
+        for i in range(1, m + 1):
+            curr = [0] * (n + 1)
+            for j in range(1, n + 1):
+                if s1[i - 1] == s2[j - 1]:
+                    curr[j] = prev[j - 1] + 1
+                    if curr[j] > max_len:
+                        max_len = curr[j]
+            prev = curr
+        return max_len
+
+    @staticmethod
+    def _years_conflict(name1: str, name2: str) -> bool:
+        """检查两个表名是否包含不同的年份（如 2023 vs 2024）"""
+        import re
+        years1 = set(re.findall(r'(\d{4})年', name1))
+        years2 = set(re.findall(r'(\d{4})年', name2))
+        if years1 and years2:
+            return bool(years1 - years2)  # 有不同年份即冲突
+        return False
 
     # ============================================================
     # 属性

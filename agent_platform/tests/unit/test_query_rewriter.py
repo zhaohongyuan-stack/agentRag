@@ -365,8 +365,9 @@ class TestQueryRewriter:
 
     def test_mock_mode(self):
         """Mock 模式下使用规则消解"""
-        # 默认 LLM 客户端应为 Mock 模式（无 API Key）
-        assert self.rewriter._llm_client.is_mock is True
+        import pytest as pytest_mod
+        if not self.rewriter._llm_client.is_mock:
+            pytest_mod.skip("LLM_API_KEY 已配置，非 Mock 模式，跳过此测试")
         ctx = SessionContext(mentioned_metrics=["资本充足率"])
         result = self.rewriter.rewrite("这个比例是多少", session_context=ctx)
         assert "资本充足率" in result.contextualized_query

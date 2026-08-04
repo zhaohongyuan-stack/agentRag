@@ -95,7 +95,9 @@ class RequestHandler:
             self._route_policy = RoutePolicy(rule_router=router if isinstance(router, RuleRouter) else None)
         else:
             self._route_policy = RoutePolicy()
-        self._evidence_builder = evidence_builder or EvidenceBuilder()
+        # 阈值 0.60: 对于 table_lookup 等结构化检索，1-2 条证据即可充分
+        # (ES_DEFAULT默认 0.85 过于严格，2/3 条证据只有 0.667)
+        self._evidence_builder = evidence_builder or EvidenceBuilder(sufficiency_threshold=0.60)
         # Phase 2: 默认使用 GroundedGenerator（内部自动降级到模板）
         self._generator = generator or GroundedGenerator()
         self._session_manager = session_manager or SessionManager()
@@ -231,6 +233,11 @@ class RequestHandler:
                 return response
 
             # 分支3: 正常检索流程
+
+            # table_lookup 意图：确保 table 通道在 channels 中（P2 默认不含 table）
+            if query_spec.intent == "table_lookup" and "table" not in route_decision.channels:
+                route_decision.channels = list(route_decision.channels) + ["table"]
+
             sm.transition(AgentState.RETRIEVING, {
                 "step": "retrieve",
                 "strategy": route_decision.channels,
@@ -307,6 +314,9 @@ class RequestHandler:
             sm.transition(AgentState.GENERATING, {"step": "generate"})
             _step_t = _now_ms()
             logger.info(f"[步骤] 回答生成中 → intent={query_spec.intent}, evidence_count={evidence_bundle.evidence_count}")
+            # DEBUG: 打印证据内容，排查 LLM 返回"依据不足"
+            for ev in evidence_bundle.evidence_items[:3]:
+                logger.info(f"[DEBUG证据] {ev.chunk_type} | {ev.source_doc}\n{getattr(ev, 'content', '')[:500]}")
             answer = self._generator.generate(
                 intent=query_spec.intent,
                 evidence_bundle=evidence_bundle,
@@ -399,12 +409,22 @@ class RequestHandler:
             return None
 
     def _build_filters(self, query_spec: QuerySpec) -> dict:
-        """从 QuerySpec 构建检索过滤条件"""
+        """从 QuerySpec 构建检索过滤条件
+
+        注意：对于 table_lookup 意图，"applicable_scope"（如"大型商业银行"）
+        是表格内行标签而非文档级元数据，不应作为 metadata 过滤条件。
+        metadata 过滤仅用于限定文档来源，表格内的行/列值应通过 table 检索器匹配。
+        """
         filters = {}
         constraints = query_spec.constraints
 
-        if constraints.get("applicable_scope"):
-            filters["applicable_scope"] = constraints["applicable_scope"]
+        # table_lookup 意图：applicable_scope 是表格行数据，不作为 metadata 过滤
+        if query_spec.intent != "table_lookup":
+            if constraints.get("applicable_scope"):
+                filters["applicable_scope"] = constraints["applicable_scope"]
+
+        # 收集搜索关键词（用于 table_lookup 的 pattern）
+        search_terms = []
 
         # 从实体中提取过滤条件
         for entity in query_spec.entities:
@@ -412,6 +432,9 @@ class RequestHandler:
             value = entity.get("value")
             if etype == "doc_name" and value:
                 filters["doc_name"] = value
+                # table_lookup 意图：doc_name 同时也映射为 table_name（用于 table 检索器）
+                if query_spec.intent == "table_lookup":
+                    filters["table_name"] = value
             elif etype == "clause_number" and value:
                 filters["clause_number"] = f"第{value}条"
             elif etype == "chapter_number" and value:
@@ -420,6 +443,46 @@ class RequestHandler:
                 filters["table_name"] = value
             elif etype == "attachment_no" and value:
                 filters["attachment_no"] = f"附件{value}"
+            elif etype == "metric_name" and value:
+                search_terms.append(value)
+            elif etype == "scope" and value:
+                search_terms.append(value)
+
+        # table_lookup 意图：构建精简搜索 pattern
+        # 交叉表结构：行=指标名，列=机构类型。
+        # 优先从引号中提取目标指标名（用户明确询问的），
+        # 避免从文档名《》中连带提取的非目标指标污染搜索词。
+        if query_spec.intent == "table_lookup":
+            import re
+            quoted = re.findall(
+                r'[“”「」\"]([^“”「」\"]+)[“”「」\"]',
+                query_spec.raw_query
+            )
+            # 排除口径/时间修饰词，剩余的作为目标指标名
+            scope_patterns = ["截至", "累计", "当期", "同比", "环比", "账面余额", "规模占比", "年-季度", "口径"]
+            quoted_metrics = []
+            if quoted:
+                seen = set()
+                for q in quoted:
+                    if q not in seen and not any(p in q for p in scope_patterns):
+                        seen.add(q)
+                        quoted_metrics.append(q)
+
+            if quoted_metrics:
+                # 优先：引号内指标名 = 用户明确询问的目标
+                filters["pattern"] = quoted_metrics[0]
+                logger.info(f"[步骤] table_lookup 从引号提取搜索词: '{filters['pattern']}'")
+            else:
+                # 回退：从实体中取指标名
+                metric_terms = [
+                    e.get("value", "")
+                    for e in query_spec.entities
+                    if e.get("entity_type") == "metric_name"
+                ]
+                if metric_terms:
+                    filters["pattern"] = " ".join(metric_terms)
+                elif search_terms:
+                    filters["pattern"] = " ".join(search_terms)
 
         return filters
 

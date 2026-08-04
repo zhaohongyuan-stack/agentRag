@@ -95,7 +95,13 @@ DEFAULT_EXECUTION_PATHS: Dict[str, ExecutionPath] = {
     "P3": ExecutionPath(
         path_id="P3",
         description="多路检索",
-        channels=["lexical", "dense", "metadata", "table"],
+        # 注意：不含 "table" 通道。
+        # table 通道仅在 table_lookup 意图时由 handler 显式追加（handler.py L238-239）。
+        # 若在此处包含 table，_channels_to_strategy 会优先选择 TABLE 策略，
+        # 导致非 table_lookup 的普通查询（如 "银行业总资产是多少"）退化为纯 BM25，
+        # 丢失 Dense 向量语义匹配和 RRF 融合，造成 BM25 文档长度惩罚导致的
+        # 同类 cell_fact 召回不全（例：B6 因 "2023年_一季度" 略长于 C6/D6/E6 被截断）。
+        channels=["lexical", "dense", "metadata"],
         top_k=30,
         rerank=True,
         rerank_top_n=10,

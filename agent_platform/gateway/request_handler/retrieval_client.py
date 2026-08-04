@@ -399,12 +399,14 @@ class RetrievalClient:
 
         if "exact" in channel_set:
             return "exact"
+        # table 优先级高于 hybrid：当 table 和 lexical+dense 同时存在时，
+        # 走 table 策略（结构化表格检索），而非 RRF 融合
+        if "table" in channel_set:
+            return "table"
         if "lexical" in channel_set and "dense" in channel_set:
             return "hybrid"
         if "relation" in channel_set or "neighborhood" in channel_set:
             return "relation"
-        if "table" in channel_set:
-            return "table"
         if "lexical" in channel_set:
             return "bm25"
         if "dense" in channel_set:

@@ -95,11 +95,68 @@ class RequestHandler:
             self._route_policy = RoutePolicy(rule_router=router if isinstance(router, RuleRouter) else None)
         else:
             self._route_policy = RoutePolicy()
-        self._evidence_builder = evidence_builder or EvidenceBuilder()
+        # 阈值 0.60: 对于 table_lookup 等结构化检索，1-2 条证据即可充分
+        # (ES_DEFAULT默认 0.85 过于严格，2/3 条证据只有 0.667)
+        self._evidence_builder = evidence_builder or EvidenceBuilder(sufficiency_threshold=0.60)
         # Phase 2: 默认使用 GroundedGenerator（内部自动降级到模板）
         self._generator = generator or GroundedGenerator()
         self._session_manager = session_manager or SessionManager()
         self._query_rewriter = query_rewriter or QueryRewriter()
+        # 文档名称解析器（延迟初始化，首次使用时从检索服务加载文档名）
+        self._doc_name_resolver = None
+
+    def _resolve_doc_name(self, raw_name: str) -> str:
+        """归一化文档名称：去后缀、统一标点、尝试别名解析
+
+        如果能解析到标准名称则返回标准名称，否则返回归一化后的原始名称。
+        """
+        import re
+
+        # 1. 基本归一化：去文件后缀、统一标点
+        normalized = re.sub(r"\.(pdf|docx|xlsx|xls|doc)$", "", raw_name, flags=re.IGNORECASE)
+        normalized = normalized.replace("：", ":").replace("（", "(").replace("）", ")")
+
+        # 2. 尝试从检索服务获取文档名列表，构建别名映射
+        if self._doc_name_resolver is None:
+            try:
+                from agent_platform.query_understanding.context_anchor import ContextAnchorExtractor
+                # 延迟初始化 DocNameResolver
+                from pathlib import Path
+                import sys
+                # 尝试从检索服务获取文档名
+                doc_names = self._fetch_doc_names()
+                if doc_names:
+                    resolver_code = Path(__file__).parent.parent.parent / "knowledge_platform" / "retrieval" / "retrieval_service" / "doc_name_resolver.py"
+                    # 直接内联实现，避免文件依赖
+                    from knowledge_platform.retrieval.retrieval_service.doc_name_resolver import DocNameResolver
+                    self._doc_name_resolver = DocNameResolver()
+                    self._doc_name_resolver.build_from_doc_names(doc_names)
+                else:
+                    self._doc_name_resolver = False  # 标记为不可用
+            except Exception as e:
+                logger.debug(f"DocNameResolver 初始化失败，使用基本归一化: {e}")
+                self._doc_name_resolver = False
+
+        # 3. 别名解析
+        if self._doc_name_resolver:
+            resolved = self._doc_name_resolver.resolve(normalized)
+            if resolved:
+                logger.info(f"[doc_name解析] '{raw_name}' → '{resolved}'")
+                return resolved
+
+        return normalized
+
+    def _fetch_doc_names(self) -> list:
+        """从检索服务获取所有文档名"""
+        try:
+            import urllib.request
+            import json
+            req = urllib.request.Request("http://retrieval:8000/api/v1/documents")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                docs = json.loads(resp.read())
+                return [d.get("doc_name", "") for d in docs if d.get("doc_name")]
+        except Exception:
+            return []
 
     def handle_query(self, request: QueryRequest) -> QueryResponse:
         """
@@ -149,9 +206,11 @@ class RequestHandler:
             sm.transition(AgentState.CONTEXT_RESOLVED, {"step": "context_resolve"})
 
             # ── 查询理解: 构建 QuerySpec ──
+            _step_t = _now_ms()
             query_spec: QuerySpec = self._query_spec_builder.build(
                 request.query, session_id=session.session_id
             )
+            logger.info(f"[步骤] 查询理解 → intent={query_spec.intent}, complexity={query_spec.complexity} ({_now_ms() - _step_t:.0f}ms)")
             sm.transition(AgentState.ANALYZED, {
                 "step": "analyze",
                 "intent": query_spec.intent,
@@ -159,6 +218,7 @@ class RequestHandler:
             })
 
             # ── 查询改写（Phase 2）──
+            _step_t = _now_ms()
             # 从会话历史构建上下文，用于指代消解
             session_context = self._build_session_context(session)
             rewritten = self._query_rewriter.rewrite(
@@ -168,9 +228,15 @@ class RequestHandler:
             )
             # 使用改写后的查询替代原始查询
             search_query = rewritten.contextualized_query or request.query
+            if search_query != request.query:
+                logger.info(f"[步骤] 查询改写 → '{search_query[:80]}' ({_now_ms() - _step_t:.0f}ms)")
+            else:
+                logger.info(f"[步骤] 查询改写 → 无变化 ({_now_ms() - _step_t:.0f}ms)")
 
             # ── 路由决策（Phase 2: 综合路由）──
+            _step_t = _now_ms()
             route_decision = self._route_policy.decide(query_spec)
+            logger.info(f"[步骤] 路由决策 → level={route_decision.level}, channels={route_decision.channels} ({_now_ms() - _step_t:.0f}ms)")
             sm.transition(AgentState.ROUTED, {
                 "step": "route",
                 "level": route_decision.level,
@@ -181,8 +247,77 @@ class RequestHandler:
 
             # ── 分支处理 ──
 
-            # 分支1: 需要澄清 — 在 CLARIFYING 状态返回澄清请求
+            # 分支1: 需要澄清 — 先尝试强语境优先检索，再决定是否澄清
             if route_decision.need_clarification and query_spec.ambiguities:
+                # 强语境优先检索：如果存在高权重锚点，先尝试检索而非直接澄清
+                from agent_platform.query_understanding.context_anchor import ContextAnchorExtractor
+                anchor_extractor = ContextAnchorExtractor()
+                anchors = anchor_extractor.extract(
+                    request.query, entities=query_spec.entities
+                )
+
+                if anchor_extractor.has_strong_context(anchors):
+                    # 有强语境锚点，先尝试检索
+                    logger.info(f"[步骤] 歧义检测到但存在强语境锚点 ({len(anchors)} 个)，尝试优先检索")
+                    enhanced_query = anchor_extractor.build_enhanced_query(
+                        request.query, anchors
+                    )
+                    anchor_filters = anchor_extractor.build_anchor_filters(anchors)
+
+                    sm.transition(AgentState.RETRIEVING, {
+                        "step": "retrieve",
+                        "strategy": "anchor_priority",
+                        "anchors": len(anchors),
+                    })
+
+                    _step_t = _now_ms()
+                    logger.info(f"[步骤] 强语境检索 → query='{enhanced_query[:60]}', filters={anchor_filters or '无'}")
+                    anchor_result = self._retrieval_client.search_by_spec(
+                        query_text=enhanced_query,
+                        route_decision=route_decision,
+                        filters=anchor_filters,
+                    )
+                    logger.info(f"[步骤] 强语境检索完成 → {anchor_result.hit_count} hits ({_now_ms() - _step_t:.0f}ms)")
+
+                    if anchor_result.success and anchor_result.hit_count > 0:
+                        sm.transition(AgentState.EVIDENCE_ASSEMBLING, {
+                            "step": "evidence_assemble",
+                            "hit_count": anchor_result.hit_count,
+                        })
+                        anchor_evidence = self._evidence_builder.build(
+                            hits=anchor_result.hits,
+                            claims=query_spec.claims,
+                            query_text=request.query,
+                        )
+
+                        if anchor_evidence.is_sufficient:
+                            # 证据充分，跳过澄清，直接生成回答
+                            logger.info(f"[步骤] 强语境检索证据充分 → sufficiency={anchor_evidence.sufficiency_score:.3f}")
+                            sm.transition(AgentState.GENERATING, {"step": "generate"})
+                            answer = self._generator.generate(
+                                intent=query_spec.intent,
+                                evidence_bundle=anchor_evidence,
+                                query_text=request.query,
+                                ambiguities=query_spec.ambiguities,
+                            )
+                            sm.transition(AgentState.RESPONDING, {"step": "respond"})
+                            response = self._build_response(
+                                request_id=request_id,
+                                session=session,
+                                sm=sm,
+                                query_spec=query_spec,
+                                route_decision=route_decision,
+                                answer=answer,
+                                evidence_bundle=anchor_evidence,
+                                start_time=start_time,
+                            )
+                            self._finalize(session, request, response, request_id)
+                            return response
+
+                    # 强语境检索仍不足，继续走澄清流程
+                    logger.info("[步骤] 强语境检索证据不足，回退到澄清流程")
+
+                # 无强语境或检索不足，返回澄清请求
                 sm.transition(AgentState.CLARIFYING, {
                     "step": "clarify",
                     "ambiguities": len(query_spec.ambiguities),
@@ -222,6 +357,11 @@ class RequestHandler:
                 return response
 
             # 分支3: 正常检索流程
+
+            # table_lookup 意图：确保 table 通道在 channels 中（P2 默认不含 table）
+            if query_spec.intent == "table_lookup" and "table" not in route_decision.channels:
+                route_decision.channels = list(route_decision.channels) + ["table"]
+
             sm.transition(AgentState.RETRIEVING, {
                 "step": "retrieve",
                 "strategy": route_decision.channels,
@@ -230,20 +370,68 @@ class RequestHandler:
             # 构建检索过滤条件
             filters = self._build_filters(query_spec)
 
-            # 调用检索（使用改写后的查询）
-            retrieval_result = self._retrieval_client.search_by_spec(
-                query_text=search_query,
-                route_decision=route_decision,
-                filters=filters,
-            )
-            logger.info(f"[步骤] 检索完成 → {retrieval_result.hit_count} hits, {retrieval_result.latency_ms:.0f}ms, filters={filters or '无'}")
+            # 查询分解检索：如果检测到子问题，对每个子问题独立检索，合并结果
+            if query_spec.sub_queries:
+                logger.info(f"[步骤] 查询分解检索 → {len(query_spec.sub_queries)} 个子问题")
+                all_hits = []
+                # 子问题检索时不带 doc_name 过滤（已修复多值覆盖问题）
+                sub_filters = {k: v for k, v in filters.items() if k != "doc_name"}
+                first_result = None
+                for sq in query_spec.sub_queries:
+                    sq_text = sq.get("text", "")
+                    sq_label = sq.get("option_label", "")
+                    _sq_t = _now_ms()
+                    sq_result = self._retrieval_client.search_by_spec(
+                        query_text=sq_text,
+                        route_decision=route_decision,
+                        filters=sub_filters,
+                    )
+                    logger.info(f"[步骤] 子问题 {sq_label} 检索 → {sq_result.hit_count} hits ({_now_ms() - _sq_t:.0f}ms)")
+                    if first_result is None:
+                        first_result = sq_result
+                    if sq_result.success and sq_result.hits:
+                        for hit in sq_result.hits:
+                            if isinstance(hit, dict):
+                                hit["_sub_query_label"] = sq_label
+                        all_hits.extend(sq_result.hits)
 
-            # ── 语义检索兜底：检索成功但证据为0时（通常因元数据过滤过严，
-            #    如 doc_name/工作表名等过滤条件未命中），去掉所有过滤条件重试，
-            #    确保语义检索执行，避免0.1s级快速空拒答 ──
+                # 去重（按 chunk_id）
+                seen_ids = set()
+                deduped_hits = []
+                for hit in all_hits:
+                    chunk_id = hit.get("chunk_id", str(id(hit))) if isinstance(hit, dict) else str(id(hit))
+                    if chunk_id not in seen_ids:
+                        seen_ids.add(chunk_id)
+                        deduped_hits.append(hit)
+
+                # 用第一个结果作为基础，替换 hits（hit_count 是 property，自动更新）
+                if first_result is not None:
+                    retrieval_result = first_result
+                    retrieval_result.hits = deduped_hits
+                else:
+                    retrieval_result = self._retrieval_client.search_by_spec(
+                        query_text=search_query,
+                        route_decision=route_decision,
+                        filters=filters,
+                    )
+                logger.info(f"[步骤] 查询分解检索完成 → 合并 {len(deduped_hits)} hits (去重前 {len(all_hits)})")
+            else:
+                # 正常单次检索
+                _step_t = _now_ms()
+                logger.info(f"[步骤] 检索中 → query='{search_query[:60]}', filters={filters or '无'}")
+                retrieval_result = self._retrieval_client.search_by_spec(
+                    query_text=search_query,
+                    route_decision=route_decision,
+                    filters=filters,
+                )
+                logger.info(f"[步骤] 检索完成 → {retrieval_result.hit_count} hits, {retrieval_result.latency_ms:.0f}ms")
+
+            # ── 语义检索兜底：检索成功但证据为0时（通常因元数据过滤过严），
+            #    去掉所有过滤条件重试，确保语义检索执行，避免7ms级快速空拒答 ──
             if retrieval_result.success and retrieval_result.hit_count == 0:
+                original_filters = filters
                 logger.info(
-                    f"[步骤] 首次检索证据不足 (hits=0, filters={filters or '无'})，触发无过滤语义检索兜底"
+                    f"[步骤] 首次检索证据不足 (hits=0, filters={original_filters or '无'})，触发无过滤语义检索兜底"
                 )
                 _step_t = _now_ms()
                 retrieval_result = self._retrieval_client.search_by_spec(
@@ -278,6 +466,7 @@ class RequestHandler:
                 )
 
             # ── 证据验证 ──
+            logger.info(f"[步骤] 证据组装 → 充分性={evidence_bundle.sufficiency_score:.3f}, sufficient={evidence_bundle.is_sufficient}")
             sm.transition(AgentState.EVIDENCE_VALIDATING, {
                 "step": "evidence_validate",
                 "sufficiency": evidence_bundle.sufficiency_score,
@@ -290,6 +479,7 @@ class RequestHandler:
                     "reason": "证据不足",
                 })
                 sm.transition(AgentState.RESPONDING, {"step": "respond"})
+                logger.info("[步骤] 回答生成 → 证据不足，生成拒答")
                 answer = self._generator.generate(
                     intent=query_spec.intent,
                     evidence_bundle=evidence_bundle,
@@ -310,12 +500,18 @@ class RequestHandler:
 
             # ── 回答生成 ──
             sm.transition(AgentState.GENERATING, {"step": "generate"})
+            _step_t = _now_ms()
+            logger.info(f"[步骤] 回答生成中 → intent={query_spec.intent}, evidence_count={evidence_bundle.evidence_count}")
+            # DEBUG: 打印证据内容，排查 LLM 返回"依据不足"
+            for ev in evidence_bundle.evidence_items[:3]:
+                logger.info(f"[DEBUG证据] {ev.chunk_type} | {ev.source_doc}\n{getattr(ev, 'content', '')[:500]}")
             answer = self._generator.generate(
                 intent=query_spec.intent,
                 evidence_bundle=evidence_bundle,
                 query_text=request.query,
                 ambiguities=query_spec.ambiguities,
             )
+            logger.info(f"[步骤] 回答生成完成 ({_now_ms() - _step_t:.0f}ms)")
 
             # ── 回答验证 ──
             sm.transition(AgentState.ANSWER_VALIDATING, {"step": "answer_validate"})
@@ -401,19 +597,31 @@ class RequestHandler:
             return None
 
     def _build_filters(self, query_spec: QuerySpec) -> dict:
-        """从 QuerySpec 构建检索过滤条件"""
+        """从 QuerySpec 构建检索过滤条件
+
+        注意：对于 table_lookup 意图，"applicable_scope"（如"大型商业银行"）
+        是表格内行标签而非文档级元数据，不应作为 metadata 过滤条件。
+        metadata 过滤仅用于限定文档来源，表格内的行/列值应通过 table 检索器匹配。
+        """
         filters = {}
         constraints = query_spec.constraints
 
-        if constraints.get("applicable_scope"):
-            filters["applicable_scope"] = constraints["applicable_scope"]
+        # table_lookup 意图：applicable_scope 是表格行数据，不作为 metadata 过滤
+        if query_spec.intent != "table_lookup":
+            if constraints.get("applicable_scope"):
+                filters["applicable_scope"] = constraints["applicable_scope"]
+
+        # 收集搜索关键词（用于 table_lookup 的 pattern）
+        search_terms = []
 
         # 从实体中提取过滤条件
+        # 修复：多个 doc_name 时不设过滤（多选题场景避免误限定检索范围）
+        doc_names = []
         for entity in query_spec.entities:
             etype = entity.get("entity_type")
             value = entity.get("value")
             if etype == "doc_name" and value:
-                filters["doc_name"] = value
+                doc_names.append(value)
             elif etype == "clause_number" and value:
                 filters["clause_number"] = f"第{value}条"
             elif etype == "chapter_number" and value:
@@ -422,6 +630,54 @@ class RequestHandler:
                 filters["table_name"] = value
             elif etype == "attachment_no" and value:
                 filters["attachment_no"] = f"附件{value}"
+            elif etype == "metric_name" and value:
+                search_terms.append(value)
+            elif etype == "scope" and value:
+                search_terms.append(value)
+
+        # 仅当单个 doc_name 时设为过滤条件（多个 doc_name 不设过滤）
+        if len(doc_names) == 1:
+            # 归一化 doc_name：去 .pdf 后缀、统一标点
+            resolved_name = self._resolve_doc_name(doc_names[0])
+            filters["doc_name"] = resolved_name
+            if query_spec.intent == "table_lookup":
+                filters["table_name"] = resolved_name
+
+        # table_lookup 意图：构建精简搜索 pattern
+        # 交叉表结构：行=指标名，列=机构类型。
+        # 优先从引号中提取目标指标名（用户明确询问的），
+        # 避免从文档名《》中连带提取的非目标指标污染搜索词。
+        if query_spec.intent == "table_lookup":
+            import re
+            quoted = re.findall(
+                r'[“”「」\"]([^“”「」\"]+)[“”「」\"]',
+                query_spec.raw_query
+            )
+            # 排除口径/时间修饰词，剩余的作为目标指标名
+            scope_patterns = ["截至", "累计", "当期", "同比", "环比", "账面余额", "规模占比", "年-季度", "口径"]
+            quoted_metrics = []
+            if quoted:
+                seen = set()
+                for q in quoted:
+                    if q not in seen and not any(p in q for p in scope_patterns):
+                        seen.add(q)
+                        quoted_metrics.append(q)
+
+            if quoted_metrics:
+                # 优先：引号内指标名 = 用户明确询问的目标
+                filters["pattern"] = quoted_metrics[0]
+                logger.info(f"[步骤] table_lookup 从引号提取搜索词: '{filters['pattern']}'")
+            else:
+                # 回退：从实体中取指标名
+                metric_terms = [
+                    e.get("value", "")
+                    for e in query_spec.entities
+                    if e.get("entity_type") == "metric_name"
+                ]
+                if metric_terms:
+                    filters["pattern"] = " ".join(metric_terms)
+                elif search_terms:
+                    filters["pattern"] = " ".join(search_terms)
 
         return filters
 

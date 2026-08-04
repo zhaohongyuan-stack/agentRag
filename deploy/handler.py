@@ -102,6 +102,61 @@ class RequestHandler:
         self._generator = generator or GroundedGenerator()
         self._session_manager = session_manager or SessionManager()
         self._query_rewriter = query_rewriter or QueryRewriter()
+        # 文档名称解析器（延迟初始化，首次使用时从检索服务加载文档名）
+        self._doc_name_resolver = None
+
+    def _resolve_doc_name(self, raw_name: str) -> str:
+        """归一化文档名称：去后缀、统一标点、尝试别名解析
+
+        如果能解析到标准名称则返回标准名称，否则返回归一化后的原始名称。
+        """
+        import re
+
+        # 1. 基本归一化：去文件后缀、统一标点
+        normalized = re.sub(r"\.(pdf|docx|xlsx|xls|doc)$", "", raw_name, flags=re.IGNORECASE)
+        normalized = normalized.replace("：", ":").replace("（", "(").replace("）", ")")
+
+        # 2. 尝试从检索服务获取文档名列表，构建别名映射
+        if self._doc_name_resolver is None:
+            try:
+                from agent_platform.query_understanding.context_anchor import ContextAnchorExtractor
+                # 延迟初始化 DocNameResolver
+                from pathlib import Path
+                import sys
+                # 尝试从检索服务获取文档名
+                doc_names = self._fetch_doc_names()
+                if doc_names:
+                    resolver_code = Path(__file__).parent.parent.parent / "knowledge_platform" / "retrieval" / "retrieval_service" / "doc_name_resolver.py"
+                    # 直接内联实现，避免文件依赖
+                    from knowledge_platform.retrieval.retrieval_service.doc_name_resolver import DocNameResolver
+                    self._doc_name_resolver = DocNameResolver()
+                    self._doc_name_resolver.build_from_doc_names(doc_names)
+                else:
+                    self._doc_name_resolver = False  # 标记为不可用
+            except Exception as e:
+                logger.debug(f"DocNameResolver 初始化失败，使用基本归一化: {e}")
+                self._doc_name_resolver = False
+
+        # 3. 别名解析
+        if self._doc_name_resolver:
+            resolved = self._doc_name_resolver.resolve(normalized)
+            if resolved:
+                logger.info(f"[doc_name解析] '{raw_name}' → '{resolved}'")
+                return resolved
+
+        return normalized
+
+    def _fetch_doc_names(self) -> list:
+        """从检索服务获取所有文档名"""
+        try:
+            import urllib.request
+            import json
+            req = urllib.request.Request("http://retrieval:8000/api/v1/documents")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                docs = json.loads(resp.read())
+                return [d.get("doc_name", "") for d in docs if d.get("doc_name")]
+        except Exception:
+            return []
 
     def handle_query(self, request: QueryRequest) -> QueryResponse:
         """
@@ -564,9 +619,11 @@ class RequestHandler:
 
         # 仅当单个 doc_name 时设为过滤条件（多个 doc_name 不设过滤）
         if len(doc_names) == 1:
-            filters["doc_name"] = doc_names[0]
+            # 归一化 doc_name：去 .pdf 后缀、统一标点
+            resolved_name = self._resolve_doc_name(doc_names[0])
+            filters["doc_name"] = resolved_name
             if query_spec.intent == "table_lookup":
-                filters["table_name"] = doc_names[0]
+                filters["table_name"] = resolved_name
 
         # table_lookup 意图：构建精简搜索 pattern
         # 交叉表结构：行=指标名，列=机构类型。

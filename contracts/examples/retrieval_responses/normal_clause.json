@@ -1,0 +1,267 @@
+[
+  {
+    "chunk_id": "400_c43",
+    "chunk_type": "clause",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十三条",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》第四十三条",
+    "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于5%。（二）一级资本充足率不得低于6%。（三）资本充足率不得低于8%。",
+    "content_raw": "第四十三条　商业银行各级资本充足率不得低于如下最低要求：\n（一）核心一级资本充足率不得低于5%。\n（二）一级资本充足率不得低于6%。\n（三）资本充足率不得低于8%。",
+    "evidence_snippet": "核心一级资本充足率不得低于5%；一级资本充足率不得低于6%；资本充足率不得低于8%。",
+    "score": 0.952,
+    "scores_detail": {
+      "bm25": 12.34,
+      "dense": 0.87,
+      "rrf": 0.032,
+      "rerank": 0.952
+    },
+    "rank": 1,
+    "matched_by": ["bm25", "dense", "rerank"],
+    "trace": {
+      "request_id": "req-clause-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712001.0,
+      "bm25_rank": 1,
+      "bm25_score": 12.34,
+      "dense_rank": 1,
+      "dense_score": 0.87,
+      "rrf_score": 0.032,
+      "rerank_score": 0.952,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "doc_name": "商业银行资本管理办法",
+        "clause_number": "第四十三条"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "400_ch7",
+        "chunk_type": "body",
+        "content": "第七章 资本充足率监管要求"
+      },
+      "children": [
+        {
+          "chunk_id": "400_c43_1",
+          "chunk_type": "item",
+          "content": "（一）核心一级资本充足率不得低于5%。"
+        },
+        {
+          "chunk_id": "400_c43_2",
+          "chunk_type": "item",
+          "content": "（二）一级资本充足率不得低于6%。"
+        },
+        {
+          "chunk_id": "400_c43_3",
+          "chunk_type": "item",
+          "content": "（三）资本充足率不得低于8%。"
+        }
+      ],
+      "siblings": [
+        {
+          "chunk_id": "400_c42",
+          "chunk_type": "clause",
+          "content": "第四十二条 商业银行资本充足率的计算应当以合并报表为基础……"
+        },
+        {
+          "chunk_id": "400_c44",
+          "chunk_type": "clause",
+          "content": "第四十四条 商业银行应当在最低资本要求的基础上计提储备资本……"
+        }
+      ],
+      "prev": {
+        "chunk_id": "400_c42",
+        "chunk_type": "clause",
+        "content": "第四十二条 商业银行资本充足率的计算应当以合并报表为基础，按照本办法规定的口径和计算方法计算。"
+      },
+      "next": {
+        "chunk_id": "400_c44",
+        "chunk_type": "clause",
+        "content": "第四十四条 商业银行应当在最低资本要求的基础上计提储备资本，储备资本要求为风险加权资产的2.5%。"
+      }
+    },
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "a3f5c9e1b7d2...",
+      "attachment_no": "正文",
+      "applicable_scope": "全部",
+      "chapter_number": "第七章",
+      "clause_number": "第四十三条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [
+        {"metric": "核心一级资本充足率", "operator": ">=", "value": 5, "unit": "%"},
+        {"metric": "一级资本充足率", "operator": ">=", "value": 6, "unit": "%"},
+        {"metric": "资本充足率", "operator": ">=", "value": 8, "unit": "%"}
+      ],
+      "keywords": ["资本充足率", "核心一级资本充足率", "一级资本充足率", "最低要求", "5%", "6%", "8%"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "400_c44",
+    "chunk_type": "clause",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十四条",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》第四十四条",
+    "content": "第四十四条 商业银行应当在最低资本要求的基础上计提储备资本，储备资本要求为风险加权资产的2.5%。在最低资本要求和储备资本要求之上计提逆周期资本，逆周期资本要求为风险加权资产的0至2.5%。",
+    "content_raw": "第四十四条　商业银行应当在最低资本要求的基础上计提储备资本，储备资本要求为风险加权资产的2.5%。",
+    "evidence_snippet": "储备资本要求为风险加权资产的2.5%；逆周期资本要求为风险加权资产的0至2.5%。",
+    "score": 0.871,
+    "scores_detail": {
+      "bm25": 8.91,
+      "dense": 0.79,
+      "rrf": 0.027,
+      "rerank": 0.871
+    },
+    "rank": 2,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-clause-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712001.0,
+      "bm25_rank": 2,
+      "bm25_score": 8.91,
+      "dense_rank": 2,
+      "dense_score": 0.79,
+      "rrf_score": 0.027,
+      "rerank_score": 0.871,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "doc_name": "商业银行资本管理办法"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "400_ch7",
+        "chunk_type": "body",
+        "content": "第七章 资本充足率监管要求"
+      },
+      "children": [],
+      "siblings": [
+        {
+          "chunk_id": "400_c43",
+          "chunk_type": "clause",
+          "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求……"
+        },
+        {
+          "chunk_id": "400_c45",
+          "chunk_type": "clause",
+          "content": "第四十五条 系统重要性银行应当计提附加资本……"
+        }
+      ],
+      "prev": {
+        "chunk_id": "400_c43",
+        "chunk_type": "clause",
+        "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求……"
+      },
+      "next": {
+        "chunk_id": "400_c45",
+        "chunk_type": "clause",
+        "content": "第四十五条 系统重要性银行应当计提附加资本……"
+      }
+    },
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "b4e6d0f2c8e3...",
+      "attachment_no": "正文",
+      "applicable_scope": "全部",
+      "chapter_number": "第七章",
+      "clause_number": "第四十四条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [
+        {"metric": "储备资本", "operator": "==", "value": 2.5, "unit": "%"},
+        {"metric": "逆周期资本", "operator": "range", "value_min": 0, "value_max": 2.5, "unit": "%"}
+      ],
+      "keywords": ["储备资本", "逆周期资本", "2.5%", "风险加权资产"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "400_c45",
+    "chunk_type": "clause",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十五条",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》第四十五条",
+    "content": "第四十五条 系统重要性银行应当计提附加资本，国内系统重要性银行附加资本要求由中国人民银行、国家金融监督管理总局确定。",
+    "content_raw": "第四十五条　系统重要性银行应当计提附加资本，国内系统重要性银行附加资本要求由中国人民银行、国家金融监督管理总局确定。",
+    "evidence_snippet": "系统重要性银行应当计提附加资本。",
+    "score": 0.834,
+    "scores_detail": {
+      "bm25": 7.52,
+      "dense": 0.76,
+      "rrf": 0.024,
+      "rerank": 0.834
+    },
+    "rank": 3,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-clause-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712001.0,
+      "bm25_rank": 3,
+      "bm25_score": 7.52,
+      "dense_rank": 3,
+      "dense_score": 0.76,
+      "rrf_score": 0.024,
+      "rerank_score": 0.834,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "doc_name": "商业银行资本管理办法"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "400_ch7",
+        "chunk_type": "body",
+        "content": "第七章 资本充足率监管要求"
+      },
+      "children": [],
+      "siblings": [],
+      "prev": {
+        "chunk_id": "400_c44",
+        "chunk_type": "clause",
+        "content": "第四十四条 商业银行应当在最低资本要求的基础上计提储备资本……"
+      },
+      "next": {
+        "chunk_id": "400_c46",
+        "chunk_type": "clause",
+        "content": "第四十六条 商业银行应当在最低资本要求、储备资本要求、逆周期资本要求及附加资本要求之上计提第二支柱资本……"
+      }
+    },
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "c5f7e1a3d9b4...",
+      "attachment_no": "正文",
+      "applicable_scope": "系统重要性银行",
+      "chapter_number": "第七章",
+      "clause_number": "第四十五条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [],
+      "keywords": ["系统重要性银行", "附加资本", "中国人民银行", "国家金融监督管理总局"],
+      "cross_attachment_refs": ["附件8"],
+      "cross_table_refs": []
+    }
+  }
+]

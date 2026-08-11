@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "query_plan.schema.json",
+  "title": "QueryPlan",
+  "description": "查询执行计划 — 逻辑计划+物理计划，Query Compiler的产出",
+  "type": "object",
+  "required": ["plan_id", "query_id", "complexity", "logical_plan"],
+  "properties": {
+    "plan_id": { "type": "string", "description": "计划唯一标识" },
+    "query_id": { "type": "string", "description": "关联的QuerySpec查询ID" },
+    "complexity": { "type": "string", "enum": ["L0", "L1", "L2", "L3", "L4"] },
+    "logical_plan": {
+      "type": "object",
+      "description": "逻辑计划 — 声明依赖关系",
+      "required": ["tasks"],
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["task_id", "task_type"],
+            "properties": {
+              "task_id": { "type": "string" },
+              "task_type": { "type": "string", "enum": ["retrieve", "expand", "verify", "generate", "compare", "aggregate"] },
+              "claim_ids": { "type": "array", "items": { "type": "string" } },
+              "depends_on": { "type": "array", "items": { "type": "string" } },
+              "can_parallel": { "type": "boolean" },
+              "completion_condition": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "physical_plan": {
+      "type": "object",
+      "description": "物理计划 — 通道调度、Top-K、超时、早停",
+      "properties": {
+        "operators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["operator_id", "task_id", "channel"],
+            "properties": {
+              "operator_id": { "type": "string" },
+              "task_id": { "type": "string" },
+              "channel": { "type": "string", "enum": ["exact", "lexical", "dense", "metadata", "table", "neighborhood", "relation", "hybrid"] },
+              "query_text": { "type": "string" },
+              "filters": { "type": "object" },
+              "top_k": { "type": "integer" },
+              "timeout_ms": { "type": "integer" },
+              "priority": { "type": "integer", "description": "启动优先级，0最高" },
+              "cancel_on_sufficient": { "type": "boolean", "description": "证据充分时是否可取消" },
+              "rerank": { "type": "boolean" },
+              "rerank_top_n": { "type": "integer" }
+            }
+          }
+        },
+        "execution_order": {
+          "type": "array",
+          "items": { "type": "array", "items": { "type": "string" } },
+          "description": "执行批次，每批内的算子可并行"
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "total_timeout_ms": { "type": "integer" },
+        "max_retrieval_rounds": { "type": "integer" },
+        "max_rewrite_count": { "type": "integer" },
+        "max_subtasks": { "type": "integer" },
+        "max_tool_calls": { "type": "integer" }
+      }
+    },
+    "cache_key": { "type": "string", "description": "计划缓存键" },
+    "estimated_cost": { "type": "number", "description": "预估成本" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

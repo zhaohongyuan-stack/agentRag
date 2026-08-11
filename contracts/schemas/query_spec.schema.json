@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "query_spec.schema.json",
+  "title": "QuerySpec",
+  "description": "查询规格 — 用户问题的结构化表示，B组查询理解模块的统一产出",
+  "type": "object",
+  "required": ["query_id", "raw_query", "intent", "complexity", "risk_level", "confidence"],
+  "properties": {
+    "query_id": {
+      "type": "string",
+      "description": "查询唯一标识（UUID）"
+    },
+    "raw_query": {
+      "type": "string",
+      "description": "用户原始问题文本"
+    },
+    "contextualized_query": {
+      "type": "string",
+      "description": "上下文化后的问题（指代消解后）"
+    },
+    "intent": {
+      "type": "string",
+      "enum": ["clause_query", "definition", "threshold", "table_lookup", "comparison", "compliance", "overview", "greeting", "unknown"],
+      "description": "查询意图类型"
+    },
+    "entities": {
+      "type": "array",
+      "description": "抽取的实体列表",
+      "items": {
+        "type": "object",
+        "required": ["entity_type", "value"],
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": ["doc_name", "doc_id", "clause_number", "chapter_number", "attachment_no", "table_name", "metric_name", "term", "organization", "date", "percentage", "amount", "scope"]
+          },
+          "value": { "type": "string" },
+          "raw_text": { "type": "string", "description": "原文中的匹配片段" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "description": "查询约束条件",
+      "properties": {
+        "time_range": { "type": "string", "description": "时间范围，如 '2026年Q1'" },
+        "version_status": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["draft", "active", "superseded", "expired", "repealed"] }
+        },
+        "applicable_scope": { "type": "string", "description": "适用范围，如 '大型商业银行'" },
+        "normative_level": {
+          "type": "string",
+          "enum": ["prohibitive", "obligatory", "permissive", "advisory", "definitional", "neutral"]
+        }
+      }
+    },
+    "answer_shape": {
+      "type": "string",
+      "enum": ["single_value", "text_excerpt", "table_cell", "comparison_table", "yes_no", "summary"],
+      "description": "期望的回答形态"
+    },
+    "retrieval_needs": {
+      "type": "array",
+      "description": "检索通道建议",
+      "items": {
+        "type": "object",
+        "properties": {
+          "channel": { "type": "string", "enum": ["exact", "lexical", "dense", "metadata", "table", "neighborhood", "relation", "hybrid"] },
+          "priority": { "type": "string", "enum": ["must", "should", "optional"] },
+          "query_text": { "type": "string", "description": "该通道专用查询文本" },
+          "filters": { "type": "object" }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "description": "声明槽位 — 需要回答的子声明",
+      "items": {
+        "type": "object",
+        "required": ["claim_id", "description"],
+        "properties": {
+          "claim_id": { "type": "string" },
+          "description": { "type": "string", "description": "声明描述，如 '适用主体'" },
+          "slot_type": { "type": "string", "description": "槽位类型，如 subject/metric/value/source/effective_date" },
+          "status": { "type": "string", "enum": ["pending", "supported", "missing", "conflict"] },
+          "evidence_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "retrieval_operators": {
+      "type": "array",
+      "description": "候选检索算子（Query IR 扩展字段）",
+      "items": {
+        "type": "object",
+        "properties": {
+          "operator_id": { "type": "string" },
+          "operator_type": { "type": "string", "enum": ["search", "filter", "expand", "aggregate", "compare"] },
+          "params": { "type": "object" }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "子任务依赖关系（Query IR 扩展字段）",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task_id": { "type": "string" },
+          "depends_on": { "type": "array", "items": { "type": "string" } },
+          "can_parallel": { "type": "boolean" }
+        }
+      }
+    },
+    "conversation_refs": {
+      "type": "object",
+      "description": "多轮对话引用",
+      "properties": {
+        "session_id": { "type": "string" },
+        "turn_number": { "type": "integer", "minimum": 0 },
+        "derived_from_turn_ids": { "type": "array", "items": { "type": "integer" } }
+      }
+    },
+    "ambiguities": {
+      "type": "array",
+      "description": "检测到的歧义",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ambiguity_type": { "type": "string", "enum": ["entity_ambiguous", "scope_missing", "version_unclear", "term_polysemous"] },
+          "description": { "type": "string" },
+          "resolution": { "type": "string", "description": "消歧建议" }
+        }
+      }
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "回答风险级别"
+    },
+    "complexity": {
+      "type": "string",
+      "enum": ["L0", "L1", "L2", "L3", "L4"],
+      "description": "复杂度评级 L0-L4"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "查询理解置信度"
+    },
+    "expected_answer": {
+      "type": "object",
+      "description": "预期答案结构（Query IR 扩展字段）",
+      "properties": {
+        "answer_type": { "type": "string" },
+        "template": { "type": "string", "description": "答案模板" }
+      }
+    },
+    "stop_conditions": {
+      "type": "object",
+      "description": "停止条件（Query IR 扩展字段）",
+      "properties": {
+        "max_retrieval_rounds": { "type": "integer" },
+        "sufficiency_threshold": { "type": "number" },
+        "max_latency_ms": { "type": "integer" }
+      }
+    }
+  }
+}

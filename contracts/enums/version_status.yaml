@@ -1,0 +1,32 @@
+# version_status — 文档版本状态枚举
+
+version_status:
+  draft:
+    value: "draft"
+    label: "草案"
+    description: "尚未正式发布的草案版本"
+    is_effective: false
+
+  active:
+    value: "active"
+    label: "现行有效"
+    description: "当前有效的正式版本"
+    is_effective: true
+
+  superseded:
+    value: "superseded"
+    label: "已被替代"
+    description: "已被新版本替代，但仍有参考价值"
+    is_effective: false
+
+  expired:
+    value: "expired"
+    label: "已过期"
+    description: "已超过有效期"
+    is_effective: false
+
+  repealed:
+    value: "repealed"
+    label: "已废止"
+    description: "已被明确废止，不再具有效力"
+    is_effective: false

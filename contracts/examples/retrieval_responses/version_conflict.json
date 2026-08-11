@@ -1,0 +1,112 @@
+[
+  {
+    "chunk_id": "400_c43_v2023",
+    "chunk_type": "clause",
+    "doc_id": "doc-400-v2023",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法（2023年版）",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十三条",
+    "source": "商业银行资本管理办法_2023.pdf",
+    "citation": "《商业银行资本管理办法》第四十三条",
+    "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于5%。（二）一级资本充足率不得低于6%。（三）资本充足率不得低于8%。",
+    "content_raw": "第四十三条　商业银行各级资本充足率不得低于如下最低要求……",
+    "evidence_snippet": "核心一级资本充足率不得低于5%",
+    "score": 0.91,
+    "scores_detail": {
+      "bm25": 10.23,
+      "dense": 0.85,
+      "rrf": 0.028
+    },
+    "rank": 1,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-version-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712361.0,
+      "bm25_rank": 1,
+      "bm25_score": 10.23,
+      "dense_rank": 1,
+      "dense_score": 0.85,
+      "rrf_score": 0.028,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "doc_name": "商业银行资本管理办法"
+      }
+    },
+    "context": null,
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2023-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "a3f5c9e1b7d2_old",
+      "attachment_no": "正文",
+      "applicable_scope": "全部",
+      "chapter_number": "第七章",
+      "clause_number": "第四十三条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [
+        {"metric": "核心一级资本充足率", "operator": ">=", "value": 5, "unit": "%"}
+      ],
+      "keywords": ["资本充足率", "核心一级资本充足率", "最低要求"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "400_c43_v2024",
+    "chunk_type": "clause",
+    "doc_id": "doc-400-v2024",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法（2024年修订版）",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十三条",
+    "source": "商业银行资本管理办法_2024.pdf",
+    "citation": "《商业银行资本管理办法》第四十三条",
+    "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于6%。（二）一级资本充足率不得低于7%。（三）资本充足率不得低于9%。",
+    "content_raw": "第四十三条　商业银行各级资本充足率不得低于如下最低要求……（2024年修订）",
+    "evidence_snippet": "核心一级资本充足率不得低于6%（2024年修订）",
+    "score": 0.89,
+    "scores_detail": {
+      "bm25": 9.87,
+      "dense": 0.83,
+      "rrf": 0.026
+    },
+    "rank": 2,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-version-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712361.0,
+      "bm25_rank": 2,
+      "bm25_score": 9.87,
+      "dense_rank": 2,
+      "dense_score": 0.83,
+      "rrf_score": 0.026,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "doc_name": "商业银行资本管理办法"
+      }
+    },
+    "context": null,
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2024-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "a3f5c9e1b7d2_new",
+      "attachment_no": "正文",
+      "applicable_scope": "全部",
+      "chapter_number": "第七章",
+      "clause_number": "第四十三条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [
+        {"metric": "核心一级资本充足率", "operator": ">=", "value": 6, "unit": "%"}
+      ],
+      "keywords": ["资本充足率", "核心一级资本充足率", "最低要求", "修订"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  }
+]

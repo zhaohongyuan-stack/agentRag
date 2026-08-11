@@ -1,0 +1,234 @@
+[
+  {
+    "chunk_id": "400_c43",
+    "chunk_type": "clause",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十三条",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》第四十三条第（一）项",
+    "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于5%。",
+    "content_raw": "第四十三条　商业银行各级资本充足率不得低于如下最低要求：\n（一）核心一级资本充足率不得低于5%。",
+    "evidence_snippet": "核心一级资本充足率不得低于5%。",
+    "score": 0.965,
+    "scores_detail": {
+      "bm25": 15.67,
+      "dense": 0.92,
+      "rrf": 0.038,
+      "rerank": 0.965
+    },
+    "rank": 1,
+    "matched_by": ["bm25", "dense", "rerank"],
+    "trace": {
+      "request_id": "req-threshold-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712061.0,
+      "bm25_rank": 1,
+      "bm25_score": 15.67,
+      "dense_rank": 1,
+      "dense_score": 0.92,
+      "rrf_score": 0.038,
+      "rerank_score": 0.965,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "applicable_scope": "商业银行"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "400_ch7",
+        "chunk_type": "body",
+        "content": "第七章 资本充足率监管要求"
+      },
+      "children": [
+        {
+          "chunk_id": "400_c43_1",
+          "chunk_type": "item",
+          "content": "（一）核心一级资本充足率不得低于5%。"
+        },
+        {
+          "chunk_id": "400_c43_2",
+          "chunk_type": "item",
+          "content": "（二）一级资本充足率不得低于6%。"
+        }
+      ],
+      "siblings": [],
+      "prev": {
+        "chunk_id": "400_c42",
+        "chunk_type": "clause",
+        "content": "第四十二条 商业银行资本充足率的计算应当以合并报表为基础……"
+      },
+      "next": {
+        "chunk_id": "400_c44",
+        "chunk_type": "clause",
+        "content": "第四十四条 商业银行应当在最低资本要求的基础上计提储备资本……"
+      }
+    },
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "a3f5c9e1b7d2...",
+      "attachment_no": "正文",
+      "applicable_scope": "全部",
+      "chapter_number": "第七章",
+      "clause_number": "第四十三条",
+      "subclause_number": "（一）",
+      "normative_level": "obligatory",
+      "numeric_conditions": [
+        {"metric": "核心一级资本充足率", "operator": ">=", "value": 5, "unit": "%", "scope": "最低要求"}
+      ],
+      "keywords": ["核心一级资本充足率", "最低要求", "5%"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "docA_c26",
+    "chunk_type": "clause",
+    "doc_id": "doc-A",
+    "doc_name": "商业银行资本管理办法（2012年版）",
+    "doc_title": "商业银行资本管理办法（试行）",
+    "hierarchy_path": "商业银行资本管理办法（试行） > 第二节 资本充足率计算公式 > 第二十六条",
+    "source": "商业银行资本管理办法_2012.pdf",
+    "citation": "《商业银行资本管理办法（试行）》第二十六条",
+    "content": "第二十六条 商业银行资本充足率监管要求包括最低资本要求、储备资本要求和逆周期资本要求、系统重要性银行附加资本要求以及第二支柱资本要求。其中，核心一级资本充足率不得低于5%。",
+    "content_raw": "第二十六条　商业银行资本充足率监管要求包括最低资本要求、储备资本要求和逆周期资本要求、系统重要性银行附加资本要求以及第二支柱资本要求。",
+    "evidence_snippet": "核心一级资本充足率不得低于5%。",
+    "score": 0.912,
+    "scores_detail": {
+      "bm25": 13.45,
+      "dense": 0.88,
+      "rrf": 0.033,
+      "rerank": 0.912
+    },
+    "rank": 2,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-threshold-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712061.0,
+      "bm25_rank": 2,
+      "bm25_score": 13.45,
+      "dense_rank": 2,
+      "dense_score": 0.88,
+      "rrf_score": 0.033,
+      "rerank_score": 0.912,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "applicable_scope": "商业银行"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "docA_ch7",
+        "chunk_type": "body",
+        "content": "第二节 资本充足率计算公式"
+      },
+      "children": [],
+      "siblings": [],
+      "prev": {
+        "chunk_id": "docA_c25",
+        "chunk_type": "clause",
+        "content": "第二十五条 商业银行应当按照本办法的规定计算各级资本充足率……"
+      },
+      "next": {
+        "chunk_id": "docA_c27",
+        "chunk_type": "clause",
+        "content": "第二十七条 商业银行核心一级资本充足率、一级资本充足率和资本充足率的计算公式……"
+      }
+    },
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2024-03-10T10:00:00Z",
+      "source_url": "https://www.cbirc.gov.cn/...",
+      "sha256": "d6a8f2b4e0c5...",
+      "attachment_no": "正文",
+      "applicable_scope": "全部",
+      "chapter_number": "第二节",
+      "clause_number": "第二十六条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [
+        {"metric": "核心一级资本充足率", "operator": ">=", "value": 5, "unit": "%"}
+      ],
+      "keywords": ["核心一级资本充足率", "5%", "监管要求", "最低资本要求"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "400_app1_t1_note",
+    "chunk_type": "note",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 附件1 > 表1 资本充足率监管要求一览表 > 报表说明",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》附件1 表1 资本充足率监管要求一览表",
+    "content": "表1 资本充足率监管要求一览表说明：核心一级资本充足率最低要求为5%，一级资本充足率最低要求为6%，资本充足率最低要求为8%。储备资本要求为2.5%。系统重要性银行附加资本要求为1%至3.5%。",
+    "content_raw": "表1 资本充足率监管要求一览表说明：核心一级资本充足率最低要求为5%……",
+    "evidence_snippet": "核心一级资本充足率最低要求为5%，储备资本要求为2.5%。",
+    "score": 0.889,
+    "scores_detail": {
+      "bm25": 11.23,
+      "dense": 0.84,
+      "rrf": 0.029,
+      "rerank": 0.889
+    },
+    "rank": 3,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-threshold-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712061.0,
+      "bm25_rank": 4,
+      "bm25_score": 11.23,
+      "dense_rank": 3,
+      "dense_score": 0.84,
+      "rrf_score": 0.029,
+      "rerank_score": 0.889,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "applicable_scope": "商业银行"
+      }
+    },
+    "context": {
+      "parent": {
+        "chunk_id": "400_app1_t1",
+        "chunk_type": "table",
+        "content": "表1 资本充足率监管要求一览表"
+      },
+      "children": [],
+      "siblings": [],
+      "prev": {
+        "chunk_id": "400_app1_t1",
+        "chunk_type": "table",
+        "content": "表1 资本充足率监管要求一览表"
+      },
+      "next": null
+    },
+    "metadata": {
+      "parser_type": "pdf_note",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "e7b9a3c5f1d6...",
+      "attachment_no": "附件1",
+      "applicable_scope": "全部",
+      "normative_level": "neutral",
+      "numeric_conditions": [
+        {"metric": "核心一级资本充足率", "operator": ">=", "value": 5, "unit": "%"},
+        {"metric": "储备资本", "operator": "==", "value": 2.5, "unit": "%"}
+      ],
+      "keywords": ["资本充足率监管要求", "5%", "2.5%", "核心一级资本充足率"],
+      "cross_attachment_refs": ["正文第四十三条"],
+      "cross_table_refs": ["表1"]
+    }
+  }
+]

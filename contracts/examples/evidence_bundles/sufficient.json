@@ -1,0 +1,98 @@
+{
+  "bundle_id": "eb-001",
+  "query_id": "q-001",
+  "claim_slots": [
+    {
+      "claim_id": "claim-1",
+      "description": "适用主体",
+      "slot_type": "subject",
+      "status": "supported",
+      "evidence_ids": ["ev-1"]
+    },
+    {
+      "claim_id": "claim-2",
+      "description": "条款编号：第四十三条",
+      "slot_type": "source",
+      "status": "supported",
+      "evidence_ids": ["ev-1"]
+    },
+    {
+      "claim_id": "claim-3",
+      "description": "法规名称：商业银行资本管理办法",
+      "slot_type": "source",
+      "status": "supported",
+      "evidence_ids": ["ev-1"]
+    },
+    {
+      "claim_id": "claim-4",
+      "description": "条款内容：各级资本充足率最低要求",
+      "slot_type": "definition",
+      "status": "supported",
+      "evidence_ids": ["ev-1", "ev-2"]
+    },
+    {
+      "claim_id": "claim-5",
+      "description": "规范强度：义务性",
+      "slot_type": "scope",
+      "status": "supported",
+      "evidence_ids": ["ev-1"]
+    },
+    {
+      "claim_id": "claim-6",
+      "description": "法规依据",
+      "slot_type": "legal_basis",
+      "status": "supported",
+      "evidence_ids": ["ev-1", "ev-2", "ev-3"]
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ev-1",
+      "chunk_id": "400_c43",
+      "source": "《商业银行资本管理办法》第四十三条",
+      "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于5%。（二）一级资本充足率不得低于6%。（三）资本充足率不得低于8%。",
+      "score": 0.952,
+      "authority_level": "regulation",
+      "version_status": "active",
+      "matched_claims": ["claim-1", "claim-2", "claim-3", "claim-4", "claim-5", "claim-6"]
+    },
+    {
+      "evidence_id": "ev-2",
+      "chunk_id": "400_c44",
+      "source": "《商业银行资本管理办法》第四十四条",
+      "content": "第四十四条 商业银行应当在最低资本要求的基础上计提储备资本，储备资本要求为风险加权资产的2.5%。",
+      "score": 0.871,
+      "authority_level": "regulation",
+      "version_status": "active",
+      "matched_claims": ["claim-4", "claim-6"]
+    },
+    {
+      "evidence_id": "ev-3",
+      "chunk_id": "400_c45",
+      "source": "《商业银行资本管理办法》第四十五条",
+      "content": "第四十五条 系统重要性银行应当计提附加资本，国内系统重要性银行附加资本要求由中国人民银行、国家金融监督管理总局确定。",
+      "score": 0.834,
+      "authority_level": "regulation",
+      "version_status": "active",
+      "matched_claims": ["claim-6"]
+    }
+  ],
+  "sufficiency": {
+    "score": 0.92,
+    "threshold": 0.85,
+    "is_sufficient": true,
+    "components": {
+      "claim_coverage": 1.0,
+      "source_authority": 0.95,
+      "version_validity": 1.0,
+      "condition_completeness": 0.9,
+      "cross_channel_consistency": 0.95,
+      "conflict_penalty": 0.0,
+      "missing_condition_penalty": 0.0
+    }
+  },
+  "conflicts": [],
+  "missing_conditions": [],
+  "retrieval_rounds": 1,
+  "created_at": "2026-01-29T10:00:00Z"
+}

@@ -1,0 +1,48 @@
+# retrieval_channels — 检索通道枚举
+# 对齐 A组 retrieval_request.py RetrievalStrategy
+
+retrieval_channels:
+  exact:
+    value: "exact"
+    label: "精确检索"
+    description: "精确/子串/正则匹配，适合查条款号、文号、专有名词"
+    modes: ["contains", "exact", "regex", "prefix"]
+
+  lexical:
+    value: "lexical"
+    label: "词法检索"
+    description: "BM25 关键词检索，基于词频统计的文本匹配"
+    alias: "bm25"
+
+  dense:
+    value: "dense"
+    label: "语义检索"
+    description: "向量语义检索，适合模糊问题、同义词、概念性查询"
+    model: "BAAI/bge-small-zh-v1.5"
+
+  metadata:
+    value: "metadata"
+    label: "元数据过滤"
+    description: "按 chunk_type/doc_id/applicable_scope 等元数据过滤"
+
+  table:
+    value: "table"
+    label: "表格检索"
+    description: "表格行列检索，按行/列/单元格取值"
+
+  neighborhood:
+    value: "neighborhood"
+    label: "邻域检索"
+    description: "父子/前后/同级/上下文 chunk 查询"
+
+  relation:
+    value: "relation"
+    label: "关系检索"
+    description: "文档与 chunk 的结构化关系查询"
+
+  hybrid:
+    value: "hybrid"
+    label: "混合检索"
+    description: "BM25 + Dense → RRF 融合（默认推荐）"
+    fusion_method: "RRF"
+    default_rrf_k: 60

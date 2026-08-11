@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python --version)",
+      "PowerShell(pip install -e \".[dev]\")",
+      "PowerShell(git ls-remote https://github.com/zhaohongyuan-stack/agentRag.git 2>&1)",
+      "PowerShell(winget --version 2>&1)",
+      "PowerShell(winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements 2>&1)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); git --version)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); cd \"c:\\\\Users\\\\MQ\\\\Desktop\\\\agent-RAG\"; git init; git remote add origin https://github.com/zhaohongyuan-stack/agentRag.git 2>&1)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); cd \"c:\\\\Users\\\\MQ\\\\Desktop\\\\agent-RAG\"; git fetch origin 2>&1; git branch -a 2>&1)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); cd \"c:\\\\Users\\\\MQ\\\\Desktop\\\\agent-RAG\"; git checkout -b Lexical origin/Lexical 2>&1)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); cd \"c:\\\\Users\\\\MQ\\\\Desktop\\\\agent-RAG\"; Remove-Item -Recurse -Force .git; git init; git remote add origin https://github.com/zhaohongyuan-stack/agentRag.git; git checkout -b Lexical; git add -A; git status)"
+    ]
+  }
+}

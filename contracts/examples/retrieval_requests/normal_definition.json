@@ -1,0 +1,24 @@
+{
+  "request_id": "req-definition-001",
+  "query": "什么是系统重要性银行",
+  "strategy": "hybrid",
+  "rerank": "cross_enc",
+  "top_k": 10,
+  "bm25_k": 20,
+  "vector_k": 20,
+  "rrf_k": 60,
+  "rerank_k": 30,
+  "filters": {
+    "chunk_type": "glossary",
+    "glossary_term": "系统重要性银行"
+  },
+  "exact_mode": "contains",
+  "expand_context": true,
+  "context_window": 2,
+  "include_content_raw": false,
+  "include_evidence": true,
+  "max_chars_per_hit": 2000,
+  "caller": "agent_platform.query_understanding",
+  "scenario": "normal",
+  "timestamp": 1769712180.0
+}

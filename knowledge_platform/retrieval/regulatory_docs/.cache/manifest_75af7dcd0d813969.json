@@ -1,0 +1,15 @@
+{
+  "cache_version": "v6_db_fingerprint",
+  "data_hash": "75af7dcd0d813969",
+  "text_hash": "5e16977c2cd4403b",
+  "chunk_count": 4546,
+  "files": {
+    "chunk_store_meta": "chunk_store_meta_75af7dcd0d813969.pkl",
+    "bm25": "bm25_75af7dcd0d813969.pkl",
+    "exact": "exact_75af7dcd0d813969.pkl",
+    "metadata": "metadata_75af7dcd0d813969.pkl",
+    "table": "table_75af7dcd0d813969.pkl",
+    "dense_meta": "dense_meta_5e16977c2cd4403b.pkl",
+    "dense_emb": "embeddings_local_5e16977c2cd4403b.npy"
+  }
+}

@@ -1,0 +1,114 @@
+[
+  {
+    "chunk_id": "400_c45",
+    "chunk_type": "clause",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十五条",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》第四十五条",
+    "content": "第四十五条 系统重要性银行应当计提附加资本，国内系统重要性银行附加资本要求由中国人民银行、国家金融监督管理总局确定。",
+    "content_raw": "第四十五条　系统重要性银行应当计提附加资本……",
+    "evidence_snippet": "系统重要性银行应当计提附加资本",
+    "score": 0.88,
+    "scores_detail": {
+      "bm25": 9.12,
+      "dense": 0.82,
+      "rrf": 0.027
+    },
+    "rank": 1,
+    "matched_by": ["bm25", "dense"],
+    "trace": {
+      "request_id": "req-partial-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712421.0,
+      "bm25_rank": 1,
+      "bm25_score": 9.12,
+      "dense_rank": 1,
+      "dense_score": 0.82,
+      "rrf_score": 0.027,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "applicable_scope": "系统重要性银行"
+      },
+      "retrieval_status": "success"
+    },
+    "context": null,
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "c5f7e1a3d9b4...",
+      "attachment_no": "正文",
+      "applicable_scope": "系统重要性银行",
+      "chapter_number": "第七章",
+      "clause_number": "第四十五条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [],
+      "keywords": ["系统重要性银行", "附加资本"],
+      "cross_attachment_refs": ["附件8"],
+      "cross_table_refs": []
+    }
+  },
+  {
+    "chunk_id": "400_c43",
+    "chunk_type": "clause",
+    "doc_id": "doc-400",
+    "doc_name": "商业银行资本管理办法",
+    "doc_title": "商业银行资本管理办法",
+    "hierarchy_path": "商业银行资本管理办法 > 第七章 资本充足率监管要求 > 第四十三条",
+    "source": "商业银行资本管理办法.pdf",
+    "citation": "《商业银行资本管理办法》第四十三条",
+    "content": "第四十三条 商业银行各级资本充足率不得低于如下最低要求：（一）核心一级资本充足率不得低于5%。",
+    "content_raw": "第四十三条　商业银行各级资本充足率不得低于如下最低要求……",
+    "evidence_snippet": "核心一级资本充足率不得低于5%",
+    "score": 0.75,
+    "scores_detail": {
+      "bm25": 6.45,
+      "dense": 0.0,
+      "rrf": 0.015
+    },
+    "rank": 2,
+    "matched_by": ["bm25"],
+    "trace": {
+      "request_id": "req-partial-001",
+      "strategy": "hybrid",
+      "rerank": "cross_enc",
+      "timestamp": 1769712421.0,
+      "bm25_rank": 2,
+      "bm25_score": 6.45,
+      "dense_rank": null,
+      "dense_score": null,
+      "rrf_score": 0.015,
+      "filters_applied": {
+        "chunk_type": "clause",
+        "applicable_scope": "系统重要性银行"
+      },
+      "retrieval_status": "partial_failure",
+      "failed_channels": ["dense"],
+      "failure_detail": "Dense 检索通道超时，仅返回 BM25 结果"
+    },
+    "context": null,
+    "metadata": {
+      "parser_type": "pdf_clause",
+      "parser_version": "1.2.0",
+      "parse_timestamp": "2025-06-15T08:30:00Z",
+      "source_url": "https://www.nfra.gov.cn/...",
+      "sha256": "a3f5c9e1b7d2...",
+      "attachment_no": "正文",
+      "applicable_scope": "全部",
+      "chapter_number": "第七章",
+      "clause_number": "第四十三条",
+      "normative_level": "obligatory",
+      "numeric_conditions": [
+        {"metric": "核心一级资本充足率", "operator": ">=", "value": 5, "unit": "%"}
+      ],
+      "keywords": ["资本充足率", "核心一级资本充足率"],
+      "cross_attachment_refs": [],
+      "cross_table_refs": []
+    }
+  }
+]

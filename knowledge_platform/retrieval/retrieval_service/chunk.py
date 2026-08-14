@@ -20,7 +20,7 @@ class Chunk:
 
     __slots__ = (
         "chunk_id", "chunk_type", "content", "hierarchy_path",
-        "source_file", "doc_id", "doc_name", "doc_title",
+        "source_file", "source_path", "doc_id", "doc_name", "doc_title",
         "metadata",
     )
 
@@ -30,6 +30,7 @@ class Chunk:
                  content: str = "",
                  hierarchy_path: str = "",
                  source_file: str = "",
+                 source_path: str = "",
                  doc_id: str = "",
                  doc_name: str = "",
                  doc_title: str = "",
@@ -39,6 +40,10 @@ class Chunk:
         self.content = content
         self.hierarchy_path = hierarchy_path
         self.source_file = source_file
+        # source_path: 原始文件相对路径（如 "银行监管/2024/资本管理办法.pdf"），
+        # 供前端溯源链接 /api/files/preview?path=<source_path> 使用。
+        # 由解析器在 metadata.source_path 中写入，缺失时为空字符串。
+        self.source_path = source_path
         self.doc_id = doc_id
         self.doc_name = doc_name
         self.doc_title = doc_title
@@ -68,6 +73,7 @@ _STANDARD_META_KEYS = frozenset({
     # 文档级（约定 3.1）
     "doc_name", "doc_id", "source_url", "sha256", "source_title", "column",
     "parse_timestamp", "parser_version", "parser_type",
+    "source_path",   # 原始文件相对路径（解析器写入，供前端溯源）
     # 结构级（约定 3.2）
     "attachment_no", "applicable_scope", "parent_section",
     "chapter_number", "clause_number", "subclause_number",
@@ -117,6 +123,7 @@ def flatten_metadata(raw: dict) -> dict:
         "hierarchy_path": raw.get("hierarchy_path", ""),
         "parent_chunk_id": raw.get("parent_chunk_id") or meta.get("parent_chunk_id", ""),
         "source_file":    meta.get("source_title") or meta.get("doc_name", ""),
+        "source_path":    meta.get("source_path", "") or raw.get("source_path", ""),
         "doc_id":         str(meta.get("doc_id", "")),
         "doc_name":       meta.get("doc_name", ""),
         "doc_title":      meta.get("source_title") or meta.get("doc_name", ""),
@@ -135,6 +142,7 @@ def flatten_metadata(raw: dict) -> dict:
             "source_url":       meta.get("source_url", ""),
             "sha256":           meta.get("sha256", ""),
             "column":           meta.get("column", ""),
+            "source_path":      meta.get("source_path", "") or raw.get("source_path", ""),
             # ── 结构级元数据（约定 3.2）──
             "attachment_no":        meta.get("attachment_no", ""),
             "applicable_scope":     meta.get("applicable_scope", "未指定"),
@@ -249,6 +257,7 @@ def _append_chunk(raw: dict, chunks: List[Chunk]):
         content=flat["content"],
         hierarchy_path=flat["hierarchy_path"],
         source_file=flat["source_file"],
+        source_path=flat["source_path"],
         doc_id=flat["doc_id"],
         doc_name=flat["doc_name"],
         doc_title=flat["doc_title"],

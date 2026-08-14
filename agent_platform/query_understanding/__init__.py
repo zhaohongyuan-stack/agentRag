@@ -51,6 +51,7 @@ class QuerySpec:
     retrieval_needs: List[Dict[str, Any]] = field(default_factory=list)
     claims: List[Dict[str, Any]] = field(default_factory=list)
     ambiguities: List[Dict[str, Any]] = field(default_factory=list)
+    resolved_terms: Dict[str, Dict[str, str]] = field(default_factory=dict)
     conversation_refs: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> dict:
@@ -68,6 +69,7 @@ class QuerySpec:
             "risk_level": self.risk_level,
             "confidence": self.confidence,
             "ambiguities": self.ambiguities,
+            "resolved_terms": self.resolved_terms,
             "conversation_refs": self.conversation_refs,
         }
 
@@ -203,6 +205,9 @@ class QuerySpecBuilder:
             query, entities=entities, intent=intent_result.intent
         )
 
+        # 4b. 收集上下文消歧结果
+        resolved_terms = getattr(self._ambiguity_detector, '_last_resolved_terms', {})
+
         # 5. 复杂度评级
         complexity = self._assess_complexity(intent_result, entities, ambiguities)
 
@@ -237,6 +242,7 @@ class QuerySpecBuilder:
             risk_level=risk_level,
             confidence=intent_result.confidence,
             ambiguities=[a.to_dict() for a in ambiguities],
+            resolved_terms=resolved_terms,
             conversation_refs=conversation_refs,
         )
 

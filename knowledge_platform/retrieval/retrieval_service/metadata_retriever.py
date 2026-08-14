@@ -45,8 +45,75 @@ Metadata 检索器 — 基于元数据字段的过滤与查询
 
 import re
 import pickle
+import unicodedata
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Set
+
+
+# ============================================================
+# doc_name 模糊匹配工具函数
+# ============================================================
+
+# 常见虚词/标点，匹配前移除以提升鲁棒性
+# 注意：包含句点(.)以处理 .pdf/.docx 等文件扩展名
+_FILLER_CHARS = set("的和与及或等了在的（）()《》〈〉·—-_—. 　\n\t\r")
+
+# bigram Jaccard 相似度阈值：query 和 actual 去虚词后，
+# 共享的字符对占比 >= 此值则视为匹配
+_DOC_NAME_FUZZY_THRESHOLD = 0.5
+
+
+def _remove_filler(text: str) -> str:
+    """移除常见虚词和标点，仅保留核心字符"""
+    return "".join(ch for ch in text if ch not in _FILLER_CHARS)
+
+
+def _bigram_set(text: str) -> Set[str]:
+    """生成字符 bigram 集合"""
+    if len(text) < 2:
+        return {text} if text else set()
+    return {text[i:i + 2] for i in range(len(text) - 1)}
+
+
+def _fuzzy_doc_name_match(query: str, actual: str,
+                          threshold: float = _DOC_NAME_FUZZY_THRESHOLD) -> bool:
+    """
+    doc_name 模糊匹配（三层渐进）：
+
+    1. 直接子串匹配（大小写不敏感）
+    2. 去虚词后子串匹配
+    3. bigram Jaccard 相似度 >= threshold
+
+    示例：
+      query="寿险合同负债评估折现率曲线"
+      actual="460_...附件1：寿险合同负债评估的折现率曲线.pdf"
+      → 第1层失败（缺"的"），第2层成功（去"的"后子串匹配）
+    """
+    q_lower = str(query).lower().strip()
+    a_lower = str(actual).lower().strip()
+    if not q_lower or not a_lower:
+        return False
+
+    # 第1层：直接子串匹配
+    if q_lower in a_lower or a_lower in q_lower:
+        return True
+
+    # 第2层：去虚词后子串匹配
+    q_clean = _remove_filler(q_lower)
+    a_clean = _remove_filler(a_lower)
+    if q_clean and a_clean:
+        if q_clean in a_clean or a_clean in q_clean:
+            return True
+
+    # 第3层：bigram Jaccard 相似度
+    q_bigrams = _bigram_set(q_clean)
+    a_bigrams = _bigram_set(a_clean)
+    if not q_bigrams or not a_bigrams:
+        return False
+    intersection = q_bigrams & a_bigrams
+    union = q_bigrams | a_bigrams
+    jaccard = len(intersection) / len(union) if union else 0.0
+    return jaccard >= threshold
 
 
 class MetadataRetriever:
@@ -229,6 +296,59 @@ class MetadataRetriever:
         allowed_ids = self.get_allowed_ids(filters)
         return {i for i, cid in enumerate(chunk_id_list) if cid in allowed_ids}
 
+    def search_fuzzy_doc_name(self, doc_name_value: str,
+                              other_filters: Optional[Dict[str, Any]] = None,
+                              limit: int = 999999) -> List[str]:
+        """
+        对 doc_name 做模糊匹配检索（精确匹配失败时的兜底方案）。
+
+        策略：
+          1. 遍历所有 chunk 的 doc_name，用 _fuzzy_doc_name_match 匹配
+          2. 收集匹配的 chunk_id
+          3. 如有 other_filters，进一步用剩余过滤条件筛选
+
+        参数：
+          doc_name_value: 用户输入的文档名（已去书名号）
+          other_filters:  除 doc_name 外的其他过滤条件
+          limit:          最多返回条数
+
+        返回：
+          匹配的 chunk_id 列表
+        """
+        if not doc_name_value:
+            return []
+
+        if self._db_mode:
+            return self._db.search_fuzzy_doc_name(
+                doc_name_value, other_filters or {}, limit=limit
+            )
+
+        # 内存降级模式
+        matched_ids = []
+        for record in self._records:
+            actual_doc_name = record.get("doc_name", "")
+            if _fuzzy_doc_name_match(doc_name_value, actual_doc_name):
+                # 如有其他过滤条件，逐条验证
+                if other_filters:
+                    all_match = True
+                    for field, condition in other_filters.items():
+                        if field == "doc_name":
+                            continue  # 已用模糊匹配处理
+                        if isinstance(condition, dict):
+                            value = condition.get("value")
+                            op = condition.get("op", "eq")
+                        else:
+                            value = condition
+                            op = "eq"
+                        if not self._match(record, field, value, op):
+                            all_match = False
+                            break
+                    if not all_match:
+                        continue
+                matched_ids.append(record.get("chunk_id", ""))
+
+        return matched_ids[:limit]
+
     # ============================================================
     # 单条匹配（降级模式用）
     # ============================================================
@@ -265,9 +385,10 @@ class MetadataRetriever:
         return False
 
     def _match_eq(self, actual: Any, value: Any, field: str) -> bool:
-        """等值匹配（对 doc_name/doc_title 做子串匹配，其余精确）"""
+        """等值匹配（对 doc_name/doc_title 做模糊匹配，其余精确）"""
         if field in ("doc_name", "doc_title"):
-            return str(value).lower() in str(actual).lower()
+            # 模糊匹配：子串 → 去虚词子串 → bigram Jaccard
+            return _fuzzy_doc_name_match(str(value), str(actual))
         if field == "keywords":
             if isinstance(actual, list):
                 return str(value) in " ".join(actual)

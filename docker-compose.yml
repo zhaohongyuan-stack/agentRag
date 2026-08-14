@@ -1,12 +1,12 @@
 version: "3.9"
 
 services:
-  # --- Redis（可选 — 会话持久化 / 计划缓存，未连接时自动降级为内存模式）---
+  # ── Redis: 工具调用缓存 + 会话持久化 ──
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -14,6 +14,86 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # ── 检索服务 (A组) ──
+  retrieval:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ace-rag-retrieval
+    working_dir: /app/knowledge_platform/retrieval
+    command: python -m retrieval_service.server
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./knowledge_platform/retrieval/regulatory_docs:/app/knowledge_platform/retrieval/regulatory_docs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── Agent 服务 (B组) ──
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ace-rag-agent
+    working_dir: /app
+    command: python -m agent_platform.server
+    ports:
+      - "0.0.0.0:8002:8002"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AGENT_PORT=8002
+      - AGENT_HOST=0.0.0.0
+      - RETRIEVAL_SERVICE_URL=http://retrieval:8000
+      - RETRIEVAL_TIMEOUT_MS=10000
+      - KB_DIR=/app/knowledge_platform/retrieval/regulatory_docs
+      - FILES_ROOT=/opt/ace-rag/data_files
+    depends_on:
+      redis:
+        condition: service_healthy
+      retrieval:
+        condition: service_healthy
+    volumes:
+      - ./knowledge_platform/retrieval/regulatory_docs:/app/knowledge_platform/retrieval/regulatory_docs
+      - ./data_files:/opt/ace-rag/data_files
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Nginx: 反向代理 + 前端静态文件 ──
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: ace-rag-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deployment/frontend:/var/www/ace-rag:ro
+    depends_on:
+      - retrieval
+      - agent
+    restart: unless-stopped
 
 volumes:
   redisdata:

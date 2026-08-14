@@ -91,6 +91,7 @@ class ConflictDetector:
         conflicts.extend(self._detect_scope_overlap(evidence_items))
         conflicts.extend(self._detect_authority_conflict(evidence_items))
         conflicts.extend(self._detect_temporal_conflict(evidence_items))
+        conflicts.extend(self._detect_table_partition_conflict(evidence_items))
 
         # 去重: 同类型且涉及相同证据集合的冲突只保留一条
         conflicts = self._deduplicate_conflicts(conflicts)
@@ -425,6 +426,68 @@ class ConflictDetector:
                     priority=CONFLICT_PRIORITY[ConflictType.TEMPORAL_CONFLICT],
                 )
                 conflicts.append(conflict)
+
+        return conflicts
+
+    def _detect_table_partition_conflict(
+        self, evidence_items: List[EvidenceItem]
+    ) -> List[Conflict]:
+        """
+        表格分区冲突检测
+
+        逻辑:
+          1. 按 (metric_name, source_doc) 分组，组内按 table_name 再分组
+          2. 同一指标在同一文档的多个 table_name 分区中出现时，判定为分区冲突
+          3. 仅检测标记，不改变证据列表，过滤逻辑由 EvidenceBuilder 控制
+
+        Args:
+            evidence_items: EvidenceItem 列表
+
+        Returns:
+            表格分区冲突列表
+        """
+        conflicts: List[Conflict] = []
+
+        # metric_name + source_doc → table_name → [EvidenceItem, ...]
+        metric_table_map: Dict[Tuple[str, str], Dict[str, List[EvidenceItem]]] = {}
+
+        for ev in evidence_items:
+            metadata = ev.metadata or {}
+            metric_name = metadata.get("metric_name", "")
+            table_name = metadata.get("table_name", "")
+            if not metric_name or not table_name:
+                continue
+
+            key = (metric_name, ev.source_doc)
+            if key not in metric_table_map:
+                metric_table_map[key] = {}
+            metric_table_map[key].setdefault(table_name, []).append(ev)
+
+        for (metric_name, doc_name), table_groups in metric_table_map.items():
+            if len(table_groups) < 2:
+                continue  # 只有一个分区，无冲突
+
+            partitions = list(table_groups.keys())
+            evidence_ids = [
+                ev.evidence_id for evs in table_groups.values() for ev in evs
+            ]
+
+            conflicts.append(Conflict(
+                conflict_id=f"conflict-{uuid.uuid4().hex[:8]}",
+                conflict_type=ConflictType.TABLE_PARTITION_CONFLICT,
+                description=(
+                    f"指标「{metric_name}」在文档「{doc_name}」的 "
+                    f"{len(partitions)} 个表格分区中均有数据："
+                    f"{'、'.join(partitions)}。需确认问题所指的具体分区。"
+                ),
+                evidence_ids=evidence_ids,
+                details={
+                    "metric": metric_name,
+                    "source_doc": doc_name,
+                    "partitions": partitions,
+                },
+                priority=CONFLICT_PRIORITY[ConflictType.TABLE_PARTITION_CONFLICT],
+            ))
 
         return conflicts
 

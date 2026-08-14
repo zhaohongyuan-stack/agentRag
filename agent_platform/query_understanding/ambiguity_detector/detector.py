@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from ..entity_extractor.extractor import ExtractedEntity
+from .domain_context_resolver import DomainContextResolver
 
 
 @dataclass
@@ -36,10 +37,12 @@ class Ambiguity:
 # ============================================================
 
 # 指代不明的代词
+# 注意：移除了通用代词 "那个"、"它"、"它们"、"这个"、"这些"，
+# 因为它们在日常表述中频繁出现（如"这些金融服务"），极易误触发歧义检测。
+# 仅保留明确带有"指代不明"语义的复合短语。
 VAGUE_REFERENCES = [
-    "那个", "那个规定", "那个文件", "那个制度",
+    "那个规定", "那个文件", "那个制度",
     "之前的规定", "之前那个", "上次说的", "刚才提到的",
-    "它", "它们", "这个", "这些",
 ]
 
 # 范围缺失的指示词 — 询问比例/数值但未指明具体指标
@@ -67,7 +70,8 @@ class AmbiguityDetector:
     """
 
     def __init__(self):
-        pass
+        self._domain_resolver = DomainContextResolver()
+        self._last_resolved_terms: Dict[str, Dict[str, str]] = {}
 
     def detect(
         self,
@@ -149,11 +153,14 @@ class AmbiguityDetector:
         query: str,
         entities: List[ExtractedEntity],
     ) -> List[Ambiguity]:
-        """检测多义术语"""
+        """检测多义术语（含上下文感知消歧）"""
         results = []
 
         # 收集所有已抽取实体的值，用于排除已被更具体实体包含的多义词
         entity_values = [e.value for e in entities if e.value]
+
+        # 重置消歧结果收集
+        self._last_resolved_terms = {}
 
         for term, explanation in POLYSEMOUS_TERMS.items():
             # 检查是否单独出现（不是作为更长术语的一部分）
@@ -176,6 +183,21 @@ class AmbiguityDetector:
                             break
 
                 if not has_more_specific:
+                    # ── 上下文感知消歧：在标记歧义前先尝试自动消歧 ──
+                    resolved, meaning, resolve_explanation = (
+                        self._domain_resolver.resolve(term, query, entities)
+                    )
+
+                    if resolved:
+                        # 上下文已消歧，不标记歧义，记录消歧结果
+                        self._last_resolved_terms[term] = {
+                            "resolved_meaning": meaning,
+                            "explanation": resolve_explanation,
+                        }
+                        # 跳过歧义标记，继续检查下一个术语
+                        continue
+
+                    # 上下文无法消歧，保留原有歧义标记逻辑
                     results.append(Ambiguity(
                         ambiguity_type="term_polysemous",
                         description=f"术语 '{term}' 存在多义性：{explanation}",

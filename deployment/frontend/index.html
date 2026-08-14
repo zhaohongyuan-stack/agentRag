@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>监管统计智能问答系统</title>
+<style>
+:root{
+  --primary:#1a3a5c; --primary-light:#2c5282; --primary-soft:#e8eef4; --primary-bg:#eef2f7;
+  --gold:#c9a961; --gold-light:#f5edd6; --gold-soft:#fdf8ee; --gold-border:#e8dcc0;
+  --bg:#f4f7fb; --white:#fff;
+  --text-primary:#1a202c; --text-secondary:#4a5568; --text-muted:#a0aec0;
+  --border:#e2e8f0; --border-strong:#cbd5e0;
+  --success:#38a169; --success-soft:#ecfdf5; --success-border:#a7f3d0;
+  --warning:#d69e2e; --warning-soft:#fffaf0;
+  --error:#e53e3e; --error-soft:#fef2f2;
+  --info:#3182ce; --info-soft:#ebf8ff;
+  --teal:#319795; --teal-soft:#f0fdfa; --teal-border:#99f6e4;
+  --purple:#805ad5; --purple-soft:#faf5ff; --coral:#c05621; --coral-soft:#fff1ec;
+  --shadow-sm:0 1px 3px rgba(26,58,92,.06); --shadow:0 4px 12px rgba(26,58,92,.1); --shadow-lg:0 8px 24px rgba(26,58,92,.12);
+  --radius-sm:6px; --radius:10px; --radius-lg:14px;
+  --gradient-blue:linear-gradient(135deg,#1a3a5c,#2c5282);
+  --gradient-gold:linear-gradient(135deg,#c9a961,#d4b06a);
+  --gradient-teal:linear-gradient(135deg,#319795,#38b2ac);
+  --gradient-purple:linear-gradient(135deg,#805ad5,#9f7aea);
+  --gradient-coral:linear-gradient(135deg,#c05621,#dd6b20);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text-primary);min-height:100vh;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh;min-width:1320px}
+
+/* ===== 顶部导航 - 渐变鲜活 ===== */
+.navbar{height:56px;background:var(--gradient-blue);display:flex;align-items:center;justify-content:space-between;padding:0 28px;color:#fff;flex-shrink:0;box-shadow:0 2px 12px rgba(26,58,92,.25)}
+.nav-left{display:flex;align-items:center;gap:14px}
+.logo{width:36px;height:36px;background:linear-gradient(135deg,var(--gold),#d4b06a);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 2px 8px rgba(201,169,97,.35)}
+.logo svg{width:22px;height:22px}
+.logo-dot{position:absolute;bottom:2px;right:2px;width:8px;height:8px;background:#fff;border-radius:50%;border:2px solid var(--gold)}
+.brand-title{display:flex;flex-direction:column;gap:1px}
+.brand-title .cn{font-size:17px;font-weight:800;letter-spacing:.5px;text-shadow:0 1px 3px rgba(0,0,0,.15)}
+.brand-title .en{font-size:9px;color:rgba(255,255,255,.65);letter-spacing:1.2px;text-transform:uppercase;font-weight:500}
+.nav-right{display:flex;align-items:center;gap:16px}
+.nav-icon-btn{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.7);cursor:pointer;transition:all .25s;position:relative}
+.nav-icon-btn:hover{background:rgba(255,255,255,.15);color:#fff;transform:scale(1.05)}
+.nav-icon-btn .badge{position:absolute;top:5px;right:5px;width:8px;height:8px;background:var(--error);border-radius:50%;border:2px solid var(--primary);animation:pulse-badge 2s infinite}
+@keyframes pulse-badge{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+.role-badge{background:linear-gradient(135deg,var(--gold),#d4b06a);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;box-shadow:0 2px 6px rgba(201,169,97,.3);letter-spacing:.3px}
+.user-name{font-size:13px;color:#fff;font-weight:600}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#d4b06a);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;box-shadow:0 2px 8px rgba(201,169,97,.3)}
+
+/* ===== 主体容器 ===== */
+.main-container{display:flex;flex:1;overflow:hidden}
+
+/* ===== 左侧菜单 - 鲜活风格 ===== */
+.sidebar{width:208px;background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 12px;flex-shrink:0;box-shadow:2px 0 12px rgba(0,0,0,.03)}
+.menu-title{font-size:10px;color:var(--text-muted);font-weight:800;text-transform:uppercase;letter-spacing:1.5px;padding:0 10px 10px;border-bottom:2px solid var(--border);margin-bottom:8px}
+.menu-list{display:flex;flex-direction:column;gap:3px}
+.menu-item{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;transition:all .25s;font-size:13px;font-weight:500;border:1.5px transparent solid;position:relative;overflow:hidden}
+.menu-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;border-radius:0 2px 2px 0;transition:all .25s}
+.menu-item:hover{background:var(--primary-bg);color:var(--primary);transform:translateX(2px)}
+.menu-item.active{background:linear-gradient(135deg,var(--primary-soft),#dbeafe);color:var(--primary);font-weight:700;border-color:rgba(44,82,130,.25);box-shadow:0 2px 8px rgba(44,82,130,.1)}
+.menu-item.active::before{background:var(--primary-light)}
+.menu-item.special{border-color:var(--gold-border);color:var(--gold);font-weight:600}
+.menu-item.special.active{background:var(--gold-soft);color:var(--primary);border-color:var(--gold)}
+.menu-item svg{width:18px;height:18px;flex-shrink:0}
+.sidebar-footer{margin-top:auto;padding-top:14px;border-top:1px solid var(--border)}
+.sys-status{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);padding:10px;background:var(--bg);border-radius:var(--radius-sm)}
+.status-dot{width:7px;height:7px;background:var(--success);border-radius:50%;animation:pulse 2s infinite;box-shadow:0 0 6px rgba(56,161,105,.5)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ===== 内容区通用 ===== */
+.content-area{flex:1;display:flex;overflow:hidden}
+.view-section{display:none;flex:1;padding:20px 24px;overflow-y:auto}
+.view-section.active{display:flex;flex-direction:column}
+.right-panel{width:340px;background:var(--white);border-left:1px solid var(--border);padding:18px;overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column;gap:14px;box-shadow:-2px 0 12px rgba(0,0,0,.03)}
+
+/* ===== 面板卡片 - 鲜活 ===== */
+.panel-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:all .25s}
+.panel-card:hover{box-shadow:var(--shadow-sm)}
+.panel-card.gold-border{border-color:var(--gold-border);box-shadow:0 4px 16px rgba(201,169,97,.12)}
+.panel-card-header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.panel-card-header h3{font-size:14px;color:var(--primary);font-weight:800}
+.panel-card-header svg{width:20px;height:20px;color:var(--primary)}
+.new-badge{background:linear-gradient(135deg,var(--gold),#d4b06a);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:10px;margin-left:auto;box-shadow:0 2px 4px rgba(201,169,97,.3)}
+
+/* ===== 场景卡片 - 鲜活渐变 ===== */
+.scenario-row{display:flex;gap:14px;margin-bottom:18px}
+.scenario-card{flex:1;background:var(--white);border:2px solid var(--border);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:all .3s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden}
+.scenario-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;opacity:0;transition:opacity .3s}
+.scenario-card:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:transparent}
+.scenario-card.active{border-color:transparent;box-shadow:0 6px 20px rgba(26,58,92,.15)}
+.scenario-card.active::after{opacity:1}
+.scenario-card[data-scenario="bank"]::after{background:var(--gradient-blue)}
+.scenario-card[data-scenario="ins"]::after{background:var(--gradient-teal)}
+.scenario-card[data-scenario="other"]::after{background:var(--gradient-purple)}
+.scenario-badge{position:absolute;top:0;right:0;font-size:9px;font-weight:800;padding:4px 14px;border-bottom-left-radius:10px;color:#fff;letter-spacing:.5px}
+.scenario-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;transition:all .3s}
+.scenario-card[data-scenario="bank"].active .scenario-icon{background:var(--gradient-blue);box-shadow:0 4px 12px rgba(26,58,92,.3)}
+.scenario-card[data-scenario="ins"].active .scenario-icon{background:var(--gradient-teal);box-shadow:0 4px 12px rgba(20,184,166,.3)}
+.scenario-card[data-scenario="other"].active .scenario-icon{background:var(--gradient-purple);box-shadow:0 4px 12px rgba(139,92,246,.3)}
+.scenario-card:not(.active) .scenario-icon{background:var(--bg)}
+.scenario-icon svg{width:18px;height:18px;color:var(--text-muted);transition:color .3s}
+.scenario-card.active .scenario-icon svg{color:#fff}
+.scenario-card h4{font-size:15px;color:var(--text-primary);margin-bottom:4px;font-weight:700}
+.scenario-card.active h4{color:var(--primary)}
+.scenario-card p{font-size:11px;color:var(--text-muted)}
+
+/* ===== 输入框 ===== */
+.chat-input-area{background:var(--white);border:2px solid var(--border-strong);border-radius:var(--radius-lg);padding:8px 8px 8px 18px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-sm);margin-bottom:14px;transition:border-color .3s}
+.chat-input-area:focus-within{border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(44,82,130,.1)}
+.chat-input-area input{flex:1;border:none;outline:none;font-size:14px;color:var(--text-primary);background:transparent}
+.chat-input-area input::placeholder{color:var(--text-muted)}
+.send-btn{height:40px;padding:0 26px;background:var(--gradient-blue);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all .25s;box-shadow:0 3px 10px rgba(26,58,92,.25)}
+.send-btn:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(26,58,92,.35)}
+.examples-label{font-size:12px;color:var(--text-secondary);margin-bottom:10px;font-weight:600}
+.examples-bubbles{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.bubble{background:var(--white);border:1.5px solid var(--border-strong);border-radius:20px;padding:8px 15px;font-size:12px;color:var(--primary);cursor:pointer;transition:all .25s;font-weight:500}
+.bubble:hover{background:var(--primary-soft);border-color:var(--primary-light);color:var(--primary);transform:translateY(-1px);box-shadow:0 3px 8px rgba(26,58,92,.1)}
+
+/* ===== 回答卡片 ===== */
+.chat-body{display:flex;gap:18px;align-items:flex-start}
+.chat-main{flex:1;min-width:0}
+.answer-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);display:none;animation:slideUp .4s cubic-bezier(.4,0,.2,1)}
+.answer-card.show{display:block}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.answer-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.answer-title{font-size:15px;font-weight:800;color:var(--primary)}
+.confidence-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--gold-light),#fff8e6);color:var(--gold);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;border:1px solid var(--gold-border);box-shadow:0 2px 6px rgba(201,169,97,.15)}
+.question-echo{font-size:13px;color:var(--text-secondary);margin-bottom:14px;font-weight:600;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm);border-left:3px solid var(--primary-light)}
+.conclusion-box{background:linear-gradient(135deg,var(--gold-soft),#fff9ed);border-left:4px solid var(--gold);border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:inset 0 1px 3px rgba(201,169,97,.08)}
+.conclusion-box .label{font-size:11px;color:var(--gold);font-weight:800;margin-bottom:5px;text-transform:uppercase;letter-spacing:1px}
+.conclusion-box .content{font-size:13px;color:var(--text-primary);line-height:1.8;font-weight:500}
+.section-title{font-size:12px;color:var(--text-secondary);font-weight:800;margin:14px 0 8px;text-transform:uppercase;letter-spacing:.5px}
+.section-text{font-size:13px;color:var(--text-secondary);line-height:1.85}
+
+/* ===== 证据截图区 ===== */
+.evidence-section{margin-top:16px;border-top:2px dashed var(--border);padding-top:16px}
+.evidence-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.evidence-head svg{width:18px;height:18px;color:var(--primary)}
+.evidence-head h4{font-size:14px;color:var(--primary);font-weight:800}
+.evidence-head .tag{margin-left:auto;font-size:11px;color:var(--gold);background:linear-gradient(135deg,var(--gold-light),#fff8e6);padding:3px 12px;border-radius:12px;font-weight:700;border:1px solid var(--gold-border)}
+.evidence-scroll{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px}
+.doc-frame{flex:0 0 320px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:all .25s}
+.doc-frame:hover{box-shadow:0 6px 20px rgba(0,0,0,.1);transform:translateY(-2px)}
+.doc-toolbar{display:flex;align-items:center;gap:6px;padding:8px 10px;background:linear-gradient(to right,#f8fafc,#f1f5f9);border-bottom:1px solid var(--border);font-size:10px;color:var(--text-muted)}
+.doc-toolbar .dot{width:8px;height:8px;border-radius:50%}
+.doc-page{position:relative;background:linear-gradient(to bottom,#fafcff,#f5f8fc);padding:18px 16px;min-height:230px;font-size:11px;line-height:1.9;color:#334155}
+.doc-page .doc-title{font-size:13px;font-weight:800;color:var(--primary);margin-bottom:10px;text-align:center;border-bottom:2px solid #e2e8f0;padding-bottom:8px}
+.doc-page p{margin-bottom:7px}
+.quote-hl{background:linear-gradient(120deg,rgba(201,169,97,.2),rgba(232,220,192,.3));border-left:3px solid var(--gold);padding:3px 6px;border-radius:4px;font-weight:700;position:relative;display:inline}
+.doc-footer{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--border);background:#fff}
+.doc-name{flex:1;font-size:11px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.dl-btn{display:inline-flex;align-items:center;gap:5px;background:var(--gradient-blue);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;transition:all .25s;box-shadow:0 2px 6px rgba(26,58,92,.2)}
+.dl-btn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(26,58,92,.3)}
+.dl-btn svg{width:13px;height:13px}
+
+/* ===== 反馈 ===== */
+.feedback-area{margin-top:16px;padding-top:16px;border-top:2px dashed var(--border)}
+.feedback-title{font-size:12px;color:var(--text-secondary);font-weight:800;margin-bottom:10px}
+.feedback-btns{display:flex;gap:8px;flex-wrap:wrap}
+.fb-btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;cursor:pointer;transition:all .25s;border:1.5px solid}
+.fb-btn.success{background:var(--success-soft);border-color:var(--success-border);color:var(--success)}
+.fb-btn.success:hover,.fb-btn.success.active{background:var(--success);color:#fff;border-color:var(--success)}
+.fb-btn.error{background:var(--error-soft);border-color:#fecaca;color:var(--error)}
+.fb-btn.error:hover,.fb-btn.error.active{background:var(--error);color:#fff}
+.fb-btn.info{background:var(--info-soft);border-color:#bfdbfe;color:var(--info)}
+.fb-btn.info:hover,.fb-btn.info.active{background:var(--info);color:#fff}
+.fb-btn svg{width:14px;height:14px}
+.followup-area{margin-top:14px;display:none;animation:fadeInUp .3s ease}
+.followup-area.show{display:block}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.followup-title{font-size:13px;color:var(--primary);font-weight:800;margin-bottom:10px}
+.followup-input{display:flex;gap:8px}
+.followup-input input{flex:1;border:2px solid var(--border-strong);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;outline:none;transition:border-color .25s}
+.followup-input input:focus{border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(44,82,130,.1)}
+.followup-input button{background:var(--gradient-gold);color:#fff;border:none;border-radius:var(--radius-sm);padding:0 18px;font-size:12px;font-weight:700;cursor:pointer;transition:all .25s}
+.followup-input button:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(201,169,97,.3)}
+.followup-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+.followup-suggestions span{font-size:11px;color:var(--text-muted);font-weight:600}
+.mini-bubble{background:var(--white);border:1.5px solid var(--border);border-radius:16px;padding:5px 12px;font-size:11px;color:var(--primary);cursor:pointer;font-weight:500;transition:all .2s}
+.mini-bubble:hover{background:var(--primary-soft);border-color:var(--primary-light);transform:translateY(-1px)}
+
+/* ===== 推理时间线 ===== */
+.timeline-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.timeline-card.gold-border{border-color:var(--gold-border);box-shadow:0 4px 16px rgba(201,169,97,.12)}
+.tl-header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.tl-header svg{width:18px;height:18px;color:var(--gold)}
+.tl-header h3{font-size:14px;color:var(--primary);font-weight:800}
+.tl-progress{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-bottom:16px}
+.tl-progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),#d4b06a,var(--primary-light));border-radius:3px;transition:width 1.2s cubic-bezier(.4,0,.2,1);width:0}
+.tl-step{display:flex;gap:10px;position:relative;padding-bottom:16px}
+.tl-step:last-child{padding-bottom:0}
+.tl-step:not(:last-child)::before{content:'';position:absolute;left:11px;top:26px;bottom:0;width:2px;background:linear-gradient(to bottom,var(--border),var(--primary-soft))}
+.tl-dot{width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;z-index:1;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.tl-dot.done{background:var(--gradient-blue)}
+.tl-dot.active{background:var(--gradient-gold);animation:pulse-dot 1.5s infinite}
+@keyframes pulse-dot{0%,100%{box-shadow:0 0 0 0 rgba(201,169,97,.4)}50%{box-shadow:0 0 0 6px rgba(201,169,97,0)}}
+.tl-dot.pending{background:var(--text-muted)}
+.tl-body{flex:1}
+.tl-title{font-size:12px;font-weight:700;color:var(--text-primary);display:flex;justify-content:space-between}
+.tl-title .pct{color:var(--gold);font-weight:800}
+.tl-desc{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.55}
+
+/* ===== 右侧面板通用 ===== */
+.kb-number{font-size:30px;font-weight:900;background:linear-gradient(135deg,var(--gold),#d4b06a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1}
+.kb-meta{font-size:12px;color:var(--text-secondary);margin-top:4px;font-weight:600}
+.kb-stats{font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.7}
+.progress-bar{width:100%;height:7px;background:var(--bg);border-radius:4px;margin-top:12px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),#d4b06a,var(--primary-light));border-radius:4px;transition:width 1.2s ease}
+.agent-box{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:var(--radius-sm);font-size:12px;margin-bottom:8px;border:1.5px solid;font-weight:600}
+.agent-box.a{background:linear-gradient(135deg,var(--success-soft),#d1fae5);border-color:var(--success-border);color:var(--success)}
+.agent-box.b{background:linear-gradient(135deg,var(--gold-soft),#fff5db);border-color:var(--gold-border);color:var(--gold)}
+.agent-box .name{font-weight:800}
+.agent-box .status{font-size:11px;opacity:.85}
+.vs-divider{display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:10px;font-weight:800;margin:10px 0;text-transform:uppercase;letter-spacing:1px}
+.vs-divider::before,.vs-divider::after{content:'';flex:1;height:1px;background:linear-gradient(to right,transparent,var(--border),transparent)}
+.adv-result{display:flex;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg,var(--success-soft),#d1fae5);border-radius:var(--radius-sm);padding:10px;font-size:12px;font-weight:800;color:var(--success);border:1px solid var(--success-border)}
+.evidence-chain{font-size:11px;color:var(--text-secondary);line-height:1.9;padding:6px 0}
+.evidence-id{font-size:10px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-family:'SF Mono',Consolas,monospace}
+
+/* ===== 视图通用 ===== */
+.view-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px}
+.view-header h2{font-size:20px;color:var(--primary);font-weight:900}
+.view-header p{font-size:12px;color:var(--text-muted);margin-top:3px;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer;transition:all .25s;border:none}
+.btn-primary{background:var(--gradient-blue);color:#fff;box-shadow:0 3px 10px rgba(26,58,92,.2)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(26,58,92,.3)}
+.btn-gold{background:var(--gradient-gold);color:#fff;box-shadow:0 3px 10px rgba(201,169,97,.2)}
+.btn-gold:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(201,169,97,.3)}
+.btn-outline{border:2px solid var(--border-strong);color:var(--text-secondary);background:#fff}
+.btn-outline:hover{border-color:var(--primary-light);color:var(--primary);background:var(--primary-soft)}
+
+/* ===== 报表检索 ===== */
+.search-filters{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.search-filters input,.search-filters select{border:2px solid var(--border-strong);border-radius:var(--radius-sm);padding:9px 14px;font-size:13px;outline:none;transition:all .25s}
+.search-filters input:focus,.search-filters select:focus{border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(44,82,130,.1)}
+.report-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.report-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .25s}
+.report-card:hover{border-color:var(--primary-light);box-shadow:var(--shadow);transform:translateY(-2px)}
+.report-card .type{font-size:10px;color:var(--primary);font-weight:800;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.report-card h4{font-size:13px;color:var(--text-primary);margin-bottom:8px;font-weight:700}
+.report-card .meta{font-size:11px;color:var(--text-muted);display:flex;gap:10px}
+
+/* ========== 制度文库 - 截图1风格：左树+卡片网格 + 思维导图3 ========== */
+.lib-layout{display:flex;gap:20px;height:100%;flex:1}
+.lib-tree{width:280px;flex-shrink:0;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-sm)}
+.lib-tree-search{padding:14px 16px;border-bottom:1.5px solid var(--border)}
+.lib-tree-search input{width:100%;border:2px solid var(--border-strong);border-radius:8px;padding:10px 12px 10px 36px;font-size:13px;outline:none;background:var(--bg) url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%23a0aec0" stroke-width="2"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5"/></svg>') no-repeat 12px center;background-size:16px;transition:all .25s}
+.lib-tree-search input:focus{border-color:var(--primary-light);background-color:#fff}
+.lib-tree-search input::placeholder{color:var(--text-muted)}
+.lib-tree-body{flex:1;overflow-y:auto;padding:8px 0}
+.tree-group{margin-bottom:2px}
+.tree-root{display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;transition:all .2s;border-radius:6px;font-weight:700;font-size:13px}
+.tree-root:hover{background:var(--bg)}
+.tree-root.active{background:var(--primary-soft);color:var(--primary)}
+.tree-root .tree-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;flex-shrink:0}
+.tree-root .count{margin-left:auto;font-size:12px;color:var(--text-muted);font-weight:700}
+.tree-children{padding-left:32px;display:none}
+.tree-children.show{display:block}
+.tree-child{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;transition:all .2s;border-radius:5px;font-size:12.5px;color:var(--text-secondary);font-weight:500}
+.tree-child:hover{background:var(--bg);color:var(--primary);padding-left:18px}
+.tree-child.active{color:var(--primary);font-weight:700;background:var(--primary-soft)}
+.tree-child .child-count{margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600}
+.tree-toggle{width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .25s;color:var(--text-muted);flex-shrink:0;font-size:10px}
+.tree-toggle.open{transform:rotate(90deg)}
+
+/* 文档卡片网格 - 截图1风格 */
+.lib-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.lib-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0}
+.lib-toolbar h3{font-size:16px;color:var(--primary);font-weight:800;display:flex;align-items:center;gap:8px}
+.lib-sort{display:flex;gap:4px}
+.lib-sort-btn{padding:6px 16px;border-radius:18px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border-strong);background:var(--white);color:var(--text-secondary);transition:all .2s}
+.lib-sort-btn.active{background:var(--gradient-blue);color:#fff;border-color:transparent}
+.lib-sort-btn:hover:not(.active){border-color:var(--primary-light);color:var(--primary)}
+.doc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;overflow-y:auto;padding:2px}
+.doc-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .3s;position:relative;overflow:hidden}
+.doc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;opacity:0;transition:opacity .3s}
+.doc-card:hover{border-color:var(--primary-light);box-shadow:var(--shadow);transform:translateY(-3px)}
+.doc-card:hover::before{opacity:1}
+.doc-card[data-type="pdf"]::before{background:var(--error)}
+.doc-card[data-type="doc"]::before{background:var(--primary-light)}
+.doc-card[data-type="xls"]::before{background:var(--success)}
+.doc-card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+.doc-file-icon{width:46px;height:54px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:800;color:#fff;flex-direction:column;gap:2px}
+.doc-file-icon.pdf{background:linear-gradient(135deg,#e53e3e,#fc8181)}
+.doc-file-icon.doc{background:linear-gradient(135deg,#3182ce,#4299e1)}
+.doc-file-icon.xls{background:linear-gradient(135deg,#38a169,#48bb78)}
+.doc-file-icon svg{width:20px;height:20px}
+.doc-card-info{flex:1;min-width:0}
+.doc-card-info h4{font-size:13.5px;color:var(--text-primary);font-weight:700;line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.doc-card-info .source{font-size:11.5px;color:var(--text-muted);font-weight:500}
+.doc-tags{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.doc-tag-pill{font-size:10px;padding:3px 9px;border-radius:10px;font-weight:700}
+.doc-tag-pill.hot{background:linear-gradient(135deg,#fef2f2,#fee2e2);color:var(--error)}
+.doc-tag-pill.new{background:linear-gradient(135deg,#ecfdf5,#d1fae5);color:var(--success)}
+.doc-tag-pill.cat{background:var(--primary-soft);color:var(--primary)}
+.doc-card-foot{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border)}
+.doc-views{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-muted);font-weight:600}
+.doc-views svg{width:14px;height:14px}
+.doc-card-actions{display:flex;gap:6px}
+.dca{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;border:1.5px solid var(--border-strong);background:#fff;color:var(--text-secondary)}
+.dca:hover{transform:scale(1.1);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.dca.view:hover{background:var(--info-soft);border-color:var(--info);color:var(--info)}
+.dca.dl:hover{background:var(--primary-soft);border-color:var(--primary-light);color:var(--primary)}
+.dca.fav:hover,.dca.fav.active{background:var(--gold-soft);border-color:var(--gold);color:var(--gold)}
+.dca.fav.active svg{fill:currentColor}
+.dca svg{width:15px;height:15px}
+
+/* ===== 文件预览抽屉 ===== */
+.fp-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.fp-overlay.show{display:flex;animation:fpFade .2s ease}
+@keyframes fpFade{from{opacity:0}to{opacity:1}}
+.fp-drawer{width:min(1100px,94vw);height:min(780px,92vh);background:#fff;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden;animation:fpSlide .25s cubic-bezier(.4,0,.2,1)}
+@keyframes fpSlide{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+.fp-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:2px solid var(--border);background:linear-gradient(to right,#f8fafc,#f1f5f9)}
+.fp-frame{flex:1;border:none;width:100%;background:#f4f7fb}
+
+/* ===== 思维导图3 - 文件分类详细树（截图3） ===== */
+.lib-mindmap-detail{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-top:18px;box-shadow:var(--shadow-sm)}
+.mmd-header{font-size:15px;color:var(--primary);font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.mmd-tree{position:relative;padding-left:20px}
+.mmd-root{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#c05621,#dd6b20);color:#fff;padding:10px 22px;border-radius:10px;font-size:15px;font-weight:800;position:relative;z-index:2}
+.mmd-level1{display:flex;gap:30px;margin-top:20px;margin-left:40px;position:relative}
+.mmd-level1::before{content:'';position:absolute;left:-28px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,#c05621,#e53e3e)}
+.mmd-l1-node{flex:1;min-width:180px}
+.mmd-l1-label{padding:10px 16px;border-radius:10px;font-size:14px;font-weight:800;text-align:center;position:relative}
+.mmd-l1-label.bank{background:linear-gradient(135deg,#319795,#38b2ac);color:#fff}
+.mmd-l1-label.ins{background:linear-gradient(135deg,#d69e2e,#ecc94b);color:#fff}
+.mmd-l1-label.other{background:linear-gradient(135deg,#e53e3e,#fc8181);color:#fff}
+.mmd-l1-connector{width:24px;height:2px;background:inherit;margin-left:-24px;margin-top:-12px;position:relative;z-index:0}
+.mmd-sub-types{margin-top:12px;padding-left:8px}
+.mmd-type-row{display:flex;align-items:flex-start;gap:6px;margin-bottom:8px;position:relative}
+.mmd-type-row::before{content:'';position:absolute;left:7px;top:0;bottom:0;width:1.5px;background:var(--border-strong)}
+.mmd-type-name{font-size:11.5px;font-weight:800;color:var(--text-secondary);min-width:42px;padding:3px 8px 3px 0;text-align:right;background:var(--bg);border-radius:4px 0 0 4px}
+.mmd-type-items{flex:1;display:flex;flex-direction:column;gap:3px;padding:4px 0}
+.mmd-item{font-size:11px;color:var(--text-primary);padding:4px 10px;background:var(--white);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;transition:all .2s;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mmd-item:hover{border-color:var(--primary-light);background:var(--primary-soft);color:var(--primary);transform:translateX(3px)}
+
+/* ===== 制度文库 - 思维导图分类（旧版式） ===== */
+.lib-list{display:flex;flex-direction:column;gap:16px;flex:1;min-height:0}
+.lib-mindmap{display:flex;align-items:stretch;gap:0;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:4px;box-shadow:var(--shadow-sm)}
+.mm-hub{flex:0 0 140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:linear-gradient(135deg,var(--primary),#2c5282);border-radius:12px;color:#fff;padding:16px}
+.mm-hub-ico{font-size:26px}
+.mm-hub-num{font-size:30px;font-weight:900;line-height:1}
+.mm-hub-lbl{font-size:11px;opacity:.85}
+.mm-line{width:38px;position:relative;flex-shrink:0}
+.mm-line::before{content:'';position:absolute;top:50%;left:0;right:0;height:2px;background:linear-gradient(to right,var(--primary-light),var(--gold))}
+.mm-branches{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-left:14px}
+.mm-branch{background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;transition:all .25s}
+.mm-branch:hover{border-color:var(--primary-light);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+.mm-branch.active{border-color:var(--gold);background:var(--gold-soft)}
+.mm-branch-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--border)}
+.mm-branch-head.bank{color:var(--primary)}
+.mm-branch-head.ins{color:var(--teal)}
+.mm-branch-head.other{color:var(--purple)}
+.mm-count{font-size:11px;font-weight:700;background:var(--white);padding:2px 9px;border-radius:10px;color:var(--text-muted)}
+.mm-subs{display:flex;flex-wrap:wrap;gap:6px}
+.mm-sub{font-size:11px;padding:5px 10px;border-radius:8px;background:var(--white);border:1.5px solid var(--border-strong);color:var(--text-secondary);cursor:pointer;font-weight:600;transition:all .2s;display:inline-flex;align-items:center;gap:5px}
+.mm-sub:hover{border-color:var(--primary-light);color:var(--primary)}
+.mm-sub.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.mm-sub i{font-style:normal;font-size:10px;opacity:.7}
+
+/* ===== 工作台 - 最近查询 ===== */
+.recent-list{display:flex;flex-direction:column;gap:8px}
+.recent-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:12px;cursor:pointer;transition:all .2s;font-weight:500}
+.recent-item:hover{background:var(--primary-soft);transform:translateX(3px)}
+.recent-item .ri-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.recent-item .ri-name{flex:1}
+.recent-item .ri-time{font-size:11px;color:var(--text-muted)}
+
+/* ===== 热点推送 ===== */
+.hot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.hot-col{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:16px;overflow:hidden}
+.hot-col-head{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:2px solid var(--border);margin-bottom:12px}
+.hot-col-head .bar{width:4px;height:20px;border-radius:3px}
+.hot-col-head h3{font-size:15px;color:var(--text-primary);font-weight:800}
+.hot-col-head .count{margin-left:auto;font-size:11px;color:var(--text-muted);font-weight:700;background:var(--bg);padding:3px 10px;border-radius:12px}
+.hot-item{display:block;padding:10px 0;border-bottom:1px dashed var(--border);cursor:pointer;transition:all .2s}
+.hot-item:last-child{border-bottom:none}
+.hot-item:hover{padding-left:6px}
+.hot-item .ht{font-size:12px;color:var(--text-primary);line-height:1.55;font-weight:600}
+.hot-item:hover .ht{color:var(--primary)}
+.hot-item .hm{font-size:10px;color:var(--text-muted);margin-top:4px;display:flex;gap:8px;align-items:center}
+.hot-tag{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:800;letter-spacing:.3px}
+.hot-calendar{grid-column:1/-1;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-top:4px}
+.cal-row{display:flex;gap:12px;overflow-x:auto;padding-top:8px}
+.cal-card{flex:0 0 140px;border:1.5px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all .25s}
+.cal-card:hover{border-color:var(--gold);box-shadow:var(--shadow-sm);transform:translateY(-2px)}
+.cal-date{font-size:11px;color:var(--text-muted);font-weight:600}
+.cal-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+.cal-event{font-size:12px;color:var(--text-primary);font-weight:700;margin-top:5px;line-height:1.4}
+.cal-org{font-size:10px;color:var(--text-muted);margin-top:5px;font-weight:500}
+
+/* ===== 工作台 - 截图2风格 ===== */
+.dash-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px}
+.stat-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:20px;position:relative;overflow:hidden;transition:all .3s}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
+.stat-card.blue::before{background:var(--gradient-blue)}
+.stat-card.gold::before{background:var(--gradient-gold)}
+.stat-card.green::before{background:linear-gradient(135deg,var(--success),#48bb78)}
+.stat-card.red::before{background:linear-gradient(135deg,var(--error),#fc8181)}
+.stat-card.purple::before{background:var(--gradient-purple)}
+.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+.stat-card .label{font-size:12px;color:var(--text-muted);margin-bottom:8px;font-weight:600;display:flex;align-items:center;gap:6px}
+.stat-card .value{font-size:28px;font-weight:900;color:var(--text-primary);line-height:1}
+.stat-card .trend{font-size:12px;margin-top:6px;font-weight:700;display:flex;align-items:center;gap:4px}
+.trend.up{color:var(--error)}
+.trend.down{color:var(--success)}
+.trend.neutral{color:var(--text-muted)}
+.stat-card .mini-ico{position:absolute;top:18px;right:18px;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;opacity:.95}
+.dash-2col{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin-bottom:18px}
+.dash-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:18px}
+.dash-card h4{font-size:14px;color:var(--primary);margin-bottom:14px;font-weight:800;display:flex;align-items:center;gap:8px}
+.task-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px;font-weight:500}
+.task-item:last-child{border-bottom:none}
+.task-status{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.quick-tools{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.qt{background:var(--white);border:1.5px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:all .25s}
+.qt:hover{border-color:var(--primary-light);transform:translateY(-3px);box-shadow:var(--shadow-sm)}
+.qt svg{width:24px;height:24px;color:var(--primary);margin-bottom:8px}
+.qt span{font-size:11px;color:var(--text-secondary);display:block;font-weight:600}
+.cal-mini{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:10px}
+.cal-mini .wd{font-size:9px;color:var(--text-muted);text-align:center;font-weight:700}
+.cal-mini .d{text-align:center;padding:6px 0;border-radius:6px;color:var(--text-secondary);cursor:pointer;font-size:11px;font-weight:600;transition:all .2s}
+.cal-mini .d.has{background:var(--primary-soft);color:var(--primary);font-weight:800}
+.cal-mini .d.today{background:var(--gradient-blue);color:#fff;font-weight:800;box-shadow:0 2px 6px rgba(26,58,92,.25)}
+.fav-list{display:flex;flex-direction:column;gap:6px}
+.fav-item{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg);border-radius:8px;font-size:11px;cursor:pointer;font-weight:500;transition:all .2s}
+.fav-item:hover{background:var(--gold-soft);transform:translateX(3px)}
+
+/* 趋势图区域 */
+.chart-area{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:18px}
+.chart-area h4{font-size:14px;color:var(--primary);margin-bottom:16px;font-weight:800;display:flex;align-items:center;gap:8px}
+.trend-chart{height:180px;position:relative;display:flex;align-items:flex-end;gap:8px;padding:0 10px}
+.trend-bar{flex:1;background:linear-gradient(to top,var(--primary-light),rgba(44,82,130,.15));border-radius:6px 6px 0 0;position:relative;min-width:24px;transition:all .3s;cursor:pointer}
+.trend-bar:hover{filter:brightness(1.1)}
+.trend-bar .bar-val{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:800;color:var(--primary);white-space:nowrap}
+.trend-bar .bar-lbl{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text-muted);font-weight:600;white-space:nowrap}
+.trend-line{position:absolute;top:0;left:0;right:0;height:100%;pointer-events:none}
+/* 知识库构成环形图 */
+.kb-donut{display:flex;align-items:center;gap:24px;padding:16px 0}
+.donut-chart{width:130px;height:130px;border-radius:50%;position:relative;flex-shrink:0}
+.donut-hole{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70px;height:70px;background:var(--white);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 2px 8px rgba(0,0,0,.06)}
+.donut-hole .num{font-size:22px;font-weight:900;color:var(--text-primary)}
+.donut-hole .lbl{font-size:9px;color:var(--text-muted)}
+.donut-legend{flex:1}
+.donut-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:12px}
+.donut-row .name{display:flex;align-items:center;gap:8px;font-weight:600}
+.donut-row .dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.donut-row .val{font-weight:800;color:var(--text-primary)}
+
+/* 历史问答（工作台内） */
+.history-section{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:18px}
+.history-section h4{font-size:14px;color:var(--primary);font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.history-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto}
+.his-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:all .2s;border:1.5px solid transparent}
+.his-item:hover{background:var(--bg);border-color:var(--border)}
+.his-q{font-size:12px;color:var(--text-primary);font-weight:600;flex:1;line-height:1.4}
+.his-meta{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.his-cat{font-size:9px;padding:2px 7px;border-radius:4px;font-weight:800}
+.his-time{font-size:10px;color:var(--text-muted);font-weight:600}
+.his-conf{font-size:11px;color:var(--gold);font-weight:800}
+
+/* 系统管理 */
+.admin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.admin-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .25s}
+.admin-card:hover{border-color:var(--primary-light);box-shadow:var(--shadow);transform:translateY(-2px)}
+.admin-card .icon{width:46px;height:46px;background:var(--primary-soft);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--primary);margin-bottom:12px}
+.admin-card h4{font-size:14px;margin-bottom:5px;font-weight:800}
+.admin-card p{font-size:11px;color:var(--text-muted);line-height:1.5}
+
+/* 对抗校验 */
+.adv-layout{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.agent-panel{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:18px;transition:all .25s}
+.agent-panel.active{border-color:var(--gold-border);box-shadow:0 4px 20px rgba(201,169,97,.12)}
+.agent-panel-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.agent-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.agent-avatar.a{background:linear-gradient(135deg,var(--success-soft),#d1fae5);color:var(--success)}
+.agent-avatar.b{background:linear-gradient(135deg,var(--gold-soft),#fff5db);color:var(--gold)}
+.agent-panel-header h4{font-size:15px}
+.agent-panel-header span{font-size:11px;color:var(--text-muted)}
+.agent-think{background:var(--bg);border-radius:var(--radius);padding:14px;font-size:12px;color:var(--text-secondary);line-height:1.75;min-height:110px}
+.diff-box{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-top:18px}
+.diff-row{display:flex;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
+.diff-row:last-child{border-bottom:none}
+.diff-col{flex:1;font-size:12px}
+.diff-col.head{color:var(--text-muted);font-weight:800;width:80px;flex:none}
+
+/* 滚动条 */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#cbd5e0;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#a0aec0}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 顶部导航 -->
+  <div class="navbar">
+    <div class="nav-left">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M4 6h16M4 11h12M4 16h8"/><circle cx="18" cy="17" r="3" fill="white" stroke="none"/></svg>
+        <div class="logo-dot"></div>
+      </div>
+      <div class="brand-title">
+        <span class="cn">监管统计智能问答系统</span>
+        <span class="en">Regulatory Statistics AI System</span>
+      </div>
+    </div>
+    <div class="nav-right">
+      <div class="nav-icon-btn" title="通知">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2C8 2 5 5 5 9v4l-2 3h18l-2-3V9c0-4-3-7-7-7z"/><path d="M10 19a2 0 004 0" stroke-linecap="round"/></svg>
+        <span class="badge"></span>
+      </div>
+      <span class="role-badge">统计岗</span>
+      <span class="user-name">张明</span>
+      <div class="avatar">张</div>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <!-- 左侧菜单（已删除合规校验） -->
+    <div class="sidebar">
+      <div class="menu-title">功能导航</div>
+      <div class="menu-list">
+        <div class="menu-item active" data-view="chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h16v12H8l-4 4V4z"/><path d="M9 10h6M9 13h4" stroke-linecap="round"/></svg>
+          <span>智能问答</span>
+        </div>
+        <div class="menu-item" data-view="report">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4" stroke-linecap="round"/></svg>
+          <span>报表检索</span>
+        </div>
+        <div class="menu-item" data-view="library">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h7v15H4V4z M13 5h7v15h-7V5z"/></svg>
+          <span>制度文库</span>
+        </div>
+        <div class="menu-item" data-view="hot">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s5 4 5 9a5 5 0 01-10 0c0-2 1-3 1-3s-1 3 2 3c0 0 0-6 2-9z"/><path d="M12 22v-5"/></svg>
+          <span>热点推送</span>
+        </div>
+        <div class="menu-item" data-view="workbench">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>工作台</span>
+        </div>
+        <div class="menu-item" data-view="system">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 5l-2 2M5 19l2-2M17 19l-2-2"/></svg>
+          <span>系统管理</span>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="sys-status">
+          <span class="status-dot"></span>
+          <span>系统运行正常 · v3.0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 内容区 -->
+    <div class="content-area">
+
+      <!-- ============ 智能问答视图（无历史栏，更宽敞） ============ -->
+      <div class="view-section active" id="view-chat">
+        <div style="display:flex;gap:0;height:100%">
+          <div class="chat-body" style="flex:1;min-width:0">
+            <div class="chat-main">
+              <!-- 三板块场景卡片 -->
+              <div class="scenario-row">
+                <div class="scenario-card active" data-scenario="bank">
+                  <div class="scenario-badge" style="background:var(--gradient-blue)">银行业务</div>
+                  <div class="scenario-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-5 9 5M5 9v9M19 9v9M9 9v9M15 9v9M3 20h18"/></svg></div>
+                  <h4>银行业务</h4>
+                  <p>存款 · 贷款 · 资本 · 流动性监管</p>
+                </div>
+                <div class="scenario-card" data-scenario="ins">
+                  <div class="scenario-badge" style="background:var(--gradient-teal)">保险业务</div>
+                  <div class="scenario-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l8 4v5c0 5-3 8-8 9-5-1-8-4-8-9V7l8-4z"/><path d="M12 8v8M8 12h8"/></svg></div>
+                  <h4>保险业务</h4>
+                  <p>偿付能力 · 资金运用 · 准备金</p>
+                </div>
+                <div class="scenario-card" data-scenario="other">
+                  <div class="scenario-badge" style="background:var(--gradient-purple)">其他业务</div>
+                  <div class="scenario-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg></div>
+                  <h4>其他业务</h4>
+                  <p>信托 · 理财 · 租赁 · 消费金融</p>
+                </div>
+              </div>
+
+              <div class="chat-input-area">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#a0aec0" stroke-width="2" width="20" height="20"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5" stroke-linecap="round"/></svg>
+                <input type="text" id="chatInput" placeholder="请输入监管统计问题，如：不良贷款率的计算口径是什么？">
+                <button class="send-btn" id="sendBtn">发送</button>
+              </div>
+
+              <div class="examples-label">试试这些问题：</div>
+              <div class="examples-bubbles" id="bubbles"></div>
+
+              <div class="answer-card" id="answerCard">
+                <div class="answer-header">
+                  <span class="answer-title">AI 回答 · <span id="ansScenario">银行业务</span></span>
+                  <span class="confidence-badge">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="8" cy="8" r="6"/><path d="M5 8l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    可信度 <span id="confValue">94</span>%
+                  </span>
+                </div>
+                <div class="question-echo" id="questionEcho">Q: 不良贷款率的计算口径是什么？</div>
+                <div class="conclusion-box">
+                  <div class="label">结论</div>
+                  <div class="content" id="conclusionText"></div>
+                </div>
+                <div class="section-title">详细解释</div>
+                <div class="section-text" id="explainText"></div>
+
+                <!-- 证据截图区 -->
+                <div class="evidence-section">
+                  <div class="evidence-head">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                    <h4>引用证据 · 原始文件截图</h4>
+                    <span class="tag" id="evidenceTag">已定位 2 份文件</span>
+                  </div>
+                  <div class="evidence-scroll" id="evidenceScroll"></div>
+                </div>
+
+                <div class="feedback-area">
+                  <div class="feedback-title">回答反馈</div>
+                  <div class="feedback-btns">
+                    <button class="fb-btn success" data-type="accurate"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="7"/><path d="M5 8l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>准确</button>
+                    <button class="fb-btn error" data-type="inaccurate">不准确</button>
+                    <button class="fb-btn info" data-type="improve">改进建议</button>
+                  </div>
+                </div>
+                <div class="followup-area" id="followupArea">
+                  <div class="followup-title">追问优化</div>
+                  <div class="followup-input">
+                    <input type="text" id="followInput" placeholder="输入追问，进一步精确答案...">
+                    <button id="followBtn">提交追问</button>
+                  </div>
+                  <div class="followup-suggestions" id="followSugs"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 推理过程时间线 -->
+            <div class="timeline-card gold-border" style="flex:0 0 290px;align-self:flex-start">
+              <div class="tl-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v8M12 14v8M2 12h8M14 12h8"/><circle cx="12" cy="12" r="3"/></svg>
+                <h3>推理过程时间线</h3>
+              </div>
+              <div class="tl-progress"><div class="tl-progress-fill" id="tlProgress" style="width:100%"></div></div>
+              <div id="timelineSteps"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 报表检索视图 ============ -->
+      <div class="view-section" id="view-report">
+        <div class="view-header">
+          <div><h2>报表检索</h2><p>快速定位监管报送报表与历史数据</p></div>
+          <button class="btn btn-primary">+ 新增检索</button>
+        </div>
+        <div class="search-filters">
+          <input type="text" placeholder="输入报表名称或编号" style="flex:1;max-width:320px">
+          <select><option>全部类型</option><option>1104报表</option><option>人行大集中</option><option>保险监管报表</option><option>内部管理报表</option></select>
+          <select><option>全部时间</option><option>2026年</option><option>2025年</option><option>2024年</option></select>
+          <button class="btn btn-primary">检索</button>
+        </div>
+        <div class="report-grid" id="reportGrid"></div>
+      </div>
+
+      <!-- ============ 制度文库视图 - 截图1风格 + 思维导图3 ============ -->
+      <div class="view-section" id="view-library">
+        <!-- 制度文库：真实文件目录树 + 文件列表 -->
+        <div class="lib-layout">
+          <!-- 左侧文件树 -->
+          <div class="lib-tree">
+            <div class="lib-tree-search">
+              <input type="text" id="fileSearch" placeholder="🔍 搜索文件..." onkeyup="fileSearchHandler(event)">
+            </div>
+            <div class="lib-tree-body" id="fileTree"></div>
+          </div>
+          <!-- 右侧文件列表 -->
+          <div class="lib-main">
+            <div class="lib-toolbar">
+              <h3>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M4 5h7l4 4v14H5V3z" stroke-linejoin="round"/><path d="M12 3v4h4"/></svg>
+                <span id="fileCurrentDir">文件库</span>
+              </h3>
+              <div class="lib-sort" style="display:flex;gap:8px;align-items:center">
+                <span style="font-size:11px;color:var(--text-muted);font-weight:600" id="fileCount"></span>
+                <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="mkdirDialog()" title="在当前目录下新建文件夹">📁 新建文件夹</button>
+                <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="uploadFileDialog()" title="上传文档到当前目录">⬆ 上传文档</button>
+                <button class="btn btn-gold" style="padding:5px 10px;font-size:12px" onclick="parseCurrentDir()" title="解析当前目录文档并嵌入检索">⚙ 解析嵌入</button>
+              </div>
+            </div>
+            <div class="doc-grid" id="fileGrid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 文件预览抽屉 -->
+      <div class="fp-overlay" id="fpOverlay" onclick="closePreview(event)">
+        <div class="fp-drawer" onclick="event.stopPropagation()">
+          <div class="fp-drawer-head">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M12 2v8M12 14v8M2 12h8M14 12h8"/><circle cx="12" cy="12" r="3"/></svg>
+              <span id="fpTitle" style="font-weight:800;color:#1a3a5c;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">文件预览</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="dl-btn" id="fpDownloadBtn" style="background:linear-gradient(135deg,#c9a961,#d4b06a)">⬇ 下载原文件</button>
+              <button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="closePreview()">✕ 关闭</button>
+            </div>
+          </div>
+          <iframe id="fpFrame" class="fp-frame"></iframe>
+        </div>
+      </div>
+
+      <!-- ============ 热点推送视图 ============ -->
+      <div class="view-section" id="view-hot">
+        <div class="view-header"><div><h2>热点推送 · 最新消息</h2><p>银行业 / 保险业 / 其他金融业务 数据公布与最新监管动态</p></div><button class="btn btn-gold" id="refreshHot">刷新</button></div>
+        <div class="hot-grid">
+          <div class="hot-col">
+            <div class="hot-col-head"><span class="bar" style="background:var(--gradient-blue)"></span><h3>银行业务</h3><span class="count">12 条更新</span></div>
+            <div class="hot-item"><div class="ht">央行公布7月金融统计数据：M2同比+8.0%</div><div class="hm"><span class="hot-tag" style="background:var(--primary-soft);color:var(--primary)">数据统计</span>人民银行 · 08-12</div></div>
+            <div class="hot-item"><div class="ht">金融监管总局发布《商业银行资本管理办法》补充通知</div><div class="hm"><span class="hot-tag" style="background:var(--error-soft);color:var(--error)">监管新规</span>金融监管总局 · 08-11</div></div>
+            <div class="hot-item"><div class="ht">二季度商业银行不良贷款率1.62%，较上季持平</div><div class="hm"><span class="hot-tag" style="background:var(--primary-soft);color:var(--primary)">数据统计</span>金融监管总局 · 08-10</div></div>
+            <div class="hot-item"><div class="ht">系统重要性银行名单更新，新增2家股份行</div><div class="hm"><span class="hot-tag" style="background:var(--gold-light);color:#8b6914">名单调整</span>人民银行 · 08-09</div></div>
+            <div class="hot-item"><div class="ht">7月社融增量1.06万亿元，信贷需求边际改善</div><div class="hm"><span class="hot-tag" style="background:var(--primary-soft);color:var(--primary)">数据统计</span>人民银行 · 08-09</div></div>
+          </div>
+          <div class="hot-col">
+            <div class="hot-col-head"><span class="bar" style="background:var(--gradient-teal)"></span><h3>保险业务</h3><span class="count">9 条更新</span></div>
+            <div class="hot-item"><div class="ht">2026年二季度保险业偿付能力充足率238%</div><div class="hm"><span class="hot-tag" style="background:var(--teal-soft);color:var(--teal)">数据统计</span>金融监管总局 · 08-12</div></div>
+            <div class="hot-item"><div class="ht">偿二代（Ⅱ）二期工程过渡期安排进一步明确</div><div class="hm"><span class="hot-tag" style="background:var(--error-soft);color:var(--error)">监管新规</span>金融监管总局 · 08-11</div></div>
+            <div class="hot-item"><div class="ht">车险综合改革的保费自主定价系数扩围</div><div class="hm"><span class="hot-tag" style="background:var(--teal-soft);color:var(--teal)">政策解读</span>保险行业协会 · 08-10</div></div>
+            <div class="hot-item"><div class="ht">保险资金投资不动产比例上限拟上调</div><div class="hm"><span class="hot-tag" style="background:var(--gold-light);color:#8b6914">征求意见</span>金融监管总局 · 08-08</div></div>
+            <div class="hot-item"><div class="ht">个人养老金保险产品名录扩容至135款</div><div class="hm"><span class="hot-tag" style="background:var(--teal-soft);color:var(--teal)">数据统计</span>人社部 · 08-07</div></div>
+          </div>
+          <div class="hot-col">
+            <div class="hot-col-head"><span class="bar" style="background:var(--gradient-purple)"></span><h3>其他金融业务</h3><span class="count">7 条更新</span></div>
+            <div class="hot-item"><div class="ht">信托业务三分类新规配套细则落地</div><div class="hm"><span class="hot-tag" style="background:var(--error-soft);color:var(--error)">监管新规</span>金融监管总局 · 08-12</div></div>
+            <div class="hot-item"><div class="ht">理财子公司净值化转型完成率已达99%</div><div class="hm"><span class="hot-tag" style="background:var(--purple-soft);color:var(--purple)">数据统计</span>银行业理财登记中心 · 08-11</div></div>
+            <div class="hot-item"><div class="ht">金融租赁公司集中度监管指标征求意见</div><div class="hm"><span class="hot-tag" style="background:var(--gold-light);color:#8b6914">征求意见</span>金融监管总局 · 08-09</div></div>
+            <div class="hot-item"><div class="ht">消费金融公司资本充足率最低要求明确为10.5%</div><div class="hm"><span class="hot-tag" style="background:var(--error-soft);color:var(--error)">监管新规</span>金融监管总局 · 08-08</div></div>
+            <div class="hot-item"><div class="ht">资管产品关联交易新规正式实施</div><div class="hm"><span class="hot-tag" style="background:var(--error-soft);color:var(--error)">监管新规</span>人民银行 · 08-06</div></div>
+          </div>
+          <div class="hot-calendar">
+            <h4 style="font-size:14px;color:var(--primary);font-weight:800;margin-bottom:6px">📅 数据公布日历</h4>
+            <div class="cal-row" id="calRow"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 工作台视图 - 旧版布局 + 历史问答 ============ -->
+      <div class="view-section" id="view-workbench">
+        <div class="view-header"><div><h2>个人工作台</h2><p>数据概览、任务管理、历史问答与快捷工具一站式入口</p></div><button class="btn btn-primary">新建任务</button></div>
+
+        <!-- 统计卡片区（5张） -->
+        <div class="dash-stats">
+          <div class="stat-card blue">
+            <div class="mini-ico" style="background:var(--primary-soft)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </div>
+            <div class="label">本月问答次数</div>
+            <div class="value">1,286<span style="font-size:16px;font-weight:600;color:var(--text-muted)"> 次</span></div>
+            <div class="trend up">▲ 12.5% 较上月</div>
+          </div>
+          <div class="stat-card gold">
+            <div class="mini-ico" style="background:var(--gold-light)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#c9a961" stroke-width="2"><path d="M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h4m6 0h4a2 2 0 012 2v10a2 2 0 01-2 2h-4M9 12h6"/></svg>
+            </div>
+            <div class="label">待报送报表</div>
+            <div class="value">7<span style="font-size:16px;font-weight:600;color:var(--text-muted)"> 份</span></div>
+            <div class="trend down">▼ 2份 较上周</div>
+          </div>
+          <div class="stat-card green">
+            <div class="mini-ico" style="background:var(--success-soft)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#38a169" stroke-width="2"><path d="M9 12l2 2 4-4M12 3l8 3v6c0 5-3 9-8 11-5-2-8-6-8-11V6l8-3z"/></svg>
+            </div>
+            <div class="label">合规校验通过率</div>
+            <div class="value">94.2<span style="font-size:16px;font-weight:600;color:var(--text-muted)"> %</span></div>
+            <div class="trend up">▲ 3.1% 较上月</div>
+          </div>
+          <div class="stat-card red">
+            <div class="mini-ico" style="background:var(--error-soft)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#e53e3e" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="label">待处理预警</div>
+            <div class="value">3<span style="font-size:16px;font-weight:600;color:var(--text-muted)"> 项</span></div>
+            <div class="trend up">▲ 1项 新增</div>
+          </div>
+          <div class="stat-card purple">
+            <div class="mini-ico" style="background:var(--purple-soft)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#805ad5" stroke-width="2"><ellipse cx="12" cy="6" rx="9" ry="3"/><path d="M3 6v6c0 1.66 4 3 9 3s9-1.34 9-3V6"/><path d="M3 12v6c0 1.66 4 3 9 3s9-1.34 9-3v-6"/></svg>
+            </div>
+            <div class="label">知识库文件</div>
+            <div class="value">502<span style="font-size:16px;font-weight:600;color:var(--text-muted)"> 份</span></div>
+            <div class="trend neutral">● 持续更新</div>
+          </div>
+        </div>
+
+        <div class="dash-2col">
+          <div>
+            <!-- 历史问答（保留新版功能） -->
+            <div class="dash-card">
+              <h4><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#1a3a5c" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> 历史问答记录</h4>
+              <div class="history-list" id="wbHistoryList">
+                <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px">暂无历史问答记录，前往「智能问答」开始提问</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <!-- 待办 + 日程 + 收藏 -->
+            <div class="dash-card">
+              <h4><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M9 11l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9"/></svg> 待办任务</h4>
+              <div class="task-item"><span class="task-status" style="background:var(--gold)"></span><span>完成 7 月 1104 报表复核</span><span style="color:var(--text-muted);margin-left:auto;font-size:11px;font-weight:600">今天</span></div>
+              <div class="task-item"><span class="task-status" style="background:var(--info)"></span><span>补充不良贷款台账说明</span><span style="color:var(--text-muted);margin-left:auto;font-size:11px;font-weight:600">明天</span></div>
+              <div class="task-item"><span class="task-status" style="background:var(--success)"></span><span>月度监管指标口径核对</span><span style="color:var(--text-muted);margin-left:auto;font-size:11px;font-weight:600">8/12</span></div>
+              <div class="task-item"><span class="task-status" style="background:var(--error)"></span><span>保险子公司偿付能力并表</span><span style="color:var(--text-muted);margin-left:auto;font-size:11px;font-weight:600">逾期</span></div>
+              <h4 style="margin-top:16px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#1a3a5c" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4" stroke-linecap="round"/></svg> 八月日程</h4>
+              <div class="cal-mini" id="miniCal"></div>
+              <h4 style="margin-top:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#c9a961" stroke-width="2"><path d="M12 2l3 7h7l-5 5 2 7-7-4-7 4 2-7-5-5h7z" stroke-linejoin="round"/></svg> 我的收藏</h4>
+              <div class="fav-list" id="favList"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 最近查询 -->
+        <div class="dash-card" style="margin-top:18px">
+          <h4><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M21 21l-4.3-4.3M11 19a8 8 0 110-16 8 8 0 010 16z" stroke-linecap="round"/></svg> 最近查询</h4>
+          <div class="recent-list" id="recentList"></div>
+        </div>
+
+        <!-- 快捷工具（4个） -->
+        <div class="dash-card" style="margin-top:18px">
+          <h4><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-linejoin="round"/><path d="M14 2v6h6" stroke-linejoin="round"/></svg> 快捷工具</h4>
+          <div class="quick-tools">
+            <div class="qt" data-tool="calc"><svg viewBox="0 0 24 24" fill="none" stroke="#1a3a5c" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h4M8 15h2M12 15h4" stroke-linecap="round"/></svg><span>指标速算</span></div>
+            <div class="qt" data-tool="tpl"><svg viewBox="0 0 24 24" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M12 2v6l4 2v12H8V10l4-2z" stroke-linejoin="round"/></svg><span>报表模板</span></div>
+            <div class="qt" data-tool="conv"><svg viewBox="0 0 24 24" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10" stroke-linecap="round"/></svg><span>口径换算</span></div>
+            <div class="qt" data-tool="exp"><svg viewBox="0 0 24 24" fill="none" stroke="#1a3a5c" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg><span>导出报告</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 系统管理视图 ============ -->
+      <div class="view-section" id="view-system">
+        <div class="view-header"><div><h2>系统管理</h2><p>用户权限、模型配置与日志审计</p></div></div>
+        <div class="admin-grid">
+          <div class="admin-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2" stroke-linecap="round"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87" stroke-linecap="round"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><h4>用户权限</h4><p>管理系统用户、角色与数据权限</p></div>
+          <div class="admin-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></svg></div><h4>模型配置</h4><p>配置大模型参数、可信阈值与校验规则</p></div>
+          <div class="admin-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-linejoin="round"/><path d="M14 2v6h6" stroke-linejoin="round"/><path d="M16 13H8M16 17H8M10 9H8"/></svg></div><h4>审计日志</h4><p>查看问答记录、操作日志与异常告警</p></div>
+          <div class="admin-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="9" ry="3"/><path d="M3 6v6c0 1.5 3.5 3 9 3s9-1.5 9-3V6"/><path d="M3 12v6c0 1.5 3.5 3 9 3s9-1.5 9-3v-6"/></svg></div><h4>知识库管理</h4><p>上传制度文件、维护向量索引与版本</p></div>
+          <div class="admin-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></div><h4>智能体管理</h4><p>配置主智能体与校验智能体角色</p></div>
+          <div class="admin-card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" stroke-linejoin="round"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg></div><h4>API 接入</h4><p>管理接口密钥、限流与调用统计</p></div>
+        </div>
+      </div>
+
+      </div>
+
+    <!-- 右侧信息面板 -->
+    <div class="right-panel" id="rightPanel">
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="9" ry="3"/><path d="M3 6v6c0 1.5 3.5 3 8 3s8-1.5 8-3V6"/><path d="M3 12v6c0 1.5 3.5 3 8 3s8-1.5 8-3v-6"/></svg>
+          <h3>知识库状态</h3>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <div class="kb-number">502</div>
+          <div class="kb-meta">份文件已入库</div>
+        </div>
+        <div class="kb-stats">法规制度 186 · 统计制度 124 · 统计口径 98 · 报表模板 94</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:86%"></div></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px;font-weight:600">知识覆盖度 86%</div>
+      </div>
+
+      <div class="panel-card gold-border">
+        <div class="panel-card-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8L4 12l4 4 M16 8l4 4-4 4 M14 4l-4 16"/></svg>
+          <h3>对抗校验模式</h3>
+          <span class="new-badge">NEW</span>
+        </div>
+        <div class="agent-box a"><span class="name">主智能体 A</span><span class="status">已完成 · 结论一致</span></div>
+        <div class="vs-divider">交叉验证</div>
+        <div class="agent-box b"><span class="name">校验智能体 B</span><span class="status">验证中 · 独立推导</span></div>
+        <div class="adv-result">
+          <svg viewBox="0 0 20 20" width="16" height="16"><circle cx="10" cy="10" r="8" fill="#38a169"/><path d="M6 10l3 3 5-6" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          结论一致 · 置信度 +6%
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v8M12 14v8M2 12h8M14 12h8"/><circle cx="12" cy="12" r="3" stroke="#c9a961"/></svg>
+          <h3>可信度构建过程</h3>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted)"></span><span style="flex:1;font-size:11px;color:var(--text-secondary)">知识检索 → 匹配3份文件</span><span style="font-size:11px;font-weight:800;color:var(--text-muted)">78%</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:var(--info)"></span><span style="flex:1;font-size:11px;color:var(--text-secondary)">语义分析 → 确认计算口径</span><span style="font-size:11px;font-weight:800;color:var(--info)">88%</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></span><span style="flex:1;font-size:11px;color:var(--text-secondary)">对抗校验 → 双智能体一致</span><span style="font-size:11px;font-weight:800;color:var(--gold)">94%</span></div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h4l2-6 4 12 2-6h4"/></svg>
+          <h3>证据追溯链</h3>
+        </div>
+        <div class="evidence-chain">
+          ① 用户提问 → 语义理解<br>
+          ② 知识检索 → 命中3份文件<br>
+          ③ 智能体A → 提取计算公式<br>
+          ④ 智能体B → 独立验证一致<br>
+          ⑤ 输出结论 → 可信度94%
+        </div>
+        <div class="evidence-id">溯源ID: TRC-20260813-001 · 可点击查看完整链路</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== 视图切换 =====================
+const menuItems=document.querySelectorAll('.menu-item');
+const views=document.querySelectorAll('.view-section');
+menuItems.forEach(item=>{
+  item.addEventListener('click',()=>{
+    const v=item.dataset.view;
+    menuItems.forEach(m=>m.classList.remove('active'));
+    item.classList.add('active');
+    views.forEach(vw=>vw.classList.remove('active'));
+    document.getElementById('view-'+v).classList.add('active');
+  });
+});
+
+// ===================== 三板块场景 =====================
+const scenarioBubbles={
+  bank:['不良贷款率的计算口径是什么？','资本充足率的监管要求是多少？','流动性覆盖率最低标准？','拨备覆盖率监管标准是多少？','存款准备金率最新调整？','杠杆率如何计算？'],
+  ins:['保险公司偿付能力充足率监管要求？','保险资金运用比例限制有哪些？','寿险责任准备金如何计提？','偿二代（Ⅱ）核心指标有哪些？','车险综改对保费影响如何？','再保险分保比例上限？'],
+  other:['信托公司净资本监管标准？','理财子公司流动性管理要求？','消费金融公司资本充足率要求？','金融租赁公司集中度限制？','资管产品净值化转型要求？','财务公司存款准备金缴存规定？']
+};
+const scenarioName={bank:'银行业务',ins:'保险业务',other:'其他业务'};
+const scenarioPlaceholder={
+  bank:'请输入银行业务问题，如：不良贷款率的计算口径是什么？',
+  ins:'请输入保险业务问题，如：保险公司偿付能力充足率监管要求？',
+  other:'请输入其他金融业务问题，如：信托公司净资本监管标准？'
+};
+
+// ===================== 智能问答数据 =====================
+const qaData={
+  '不良贷款率的计算口径是什么？':{scenario:'bank',confidence:94,keywords:['不良贷款率','五级分类','各项贷款'],hits:6,
+    conclusion:'不良贷款率 =（次级类贷款 + 可疑类贷款 + 损失类贷款）÷ 各项贷款总额 × 100%。该指标按月计算并上报，是衡量银行资产质量的核心监管指标。',
+    explain:'根据《商业银行风险监管核心指标》，不良贷款按五级分类划分为次级、可疑、损失三类。分子为三类贷款余额之和，分母为各项贷款余额。监管要求不良贷款率不得高于 5%。',
+    docs:[{name:'《商业银行风险监管核心指标》银监发〔2006〕97号',meta:'监管核心指标·第3章',page:'12',title:'商业银行风险监管核心指标',before:'第三条 资产质量指标',quote:'不良贷款率 =（次级类贷款 + 可疑类贷款 + 损失类贷款）÷ 各项贷款总额 × 100%',after:'该指标按月计算并报送银保监会。'},
+    {name:'《贷款风险分类指引》银监发〔2007〕54号',meta:'分类指引·附件',page:'8',title:'贷款风险分类指引',before:'贷款划分为正常、关注、次级、可疑和损失五类',quote:'次级、可疑和损失类贷款合称为不良贷款',after:'分类结果应真实反映贷款风险状况。'}]},
+  '资本充足率的监管要求是多少？':{scenario:'bank',confidence:96,keywords:['资本充足率','储备资本','系统重要性'],hits:5,
+    conclusion:'系统重要性银行核心一级资本充足率≥8.5%、一级≥9.5%、资本充足率≥11.5%；其他银行核心一级≥7.5%、一级≥8.5%、资本充足率≥10.5%。',
+    explain:'根据《商业银行资本管理办法》，最低要求为核心一级 5%、一级 6%、资本充足率 8%，另加储备资本 2.5% 及逆周期资本。系统重要性银行还需计提附加资本。',
+    docs:[{name:'《商业银行资本管理办法》金融监管总局令2023年第4号',meta:'资本办法·正文',page:'21',title:'商业银行资本管理办法',before:'商业银行各级资本充足率不得低于以下要求',quote:'核心一级资本充足率不得低于 5%，一级资本充足率不得低于 6%，资本充足率不得低于 8%',after:'还应满足储备资本 2.5% 等缓冲要求。'}]},
+  '流动性覆盖率最低标准？':{scenario:'bank',confidence:92,keywords:['流动性覆盖率','LCR','优质流动性资产'],hits:4,
+    conclusion:'流动性覆盖率（LCR）最低监管标准为不低于 100%，确保压力情景下持有充足高流动性资产。',
+    explain:'LCR = 合格优质流动性资产 ÷ 未来30天现金净流出量 × 100%。根据《商业银行流动性风险管理办法》，LCR 应持续达到 100%。',
+    docs:[{name:'《商业银行流动性风险管理办法》银保监会令2018年第3号',meta:'流动性办法·计量',page:'15',title:'商业银行流动性风险管理办法',before:'流动性覆盖率计算公式为',quote:'流动性覆盖率 = 合格优质流动性资产 ÷ 未来30天现金净流出量 × 100%',after:'商业银行流动性覆盖率应当持续不低于 100%。'}]},
+  '拨备覆盖率监管标准是多少？':{scenario:'bank',confidence:91,keywords:['拨备覆盖率','贷款拨备率','动态下调'],hits:3,
+    conclusion:'拨备覆盖率基本标准为 120%～150%，贷款拨备率基本标准为 1.5%～2.5%，可按风险状况差异化调整。',
+    explain:'拨备覆盖率 = 贷款损失准备 ÷ 不良贷款余额 × 100%。对特定时期可阶段性下调拨备覆盖率监管要求。',
+    docs:[{name:'《关于调整商业银行贷款损失准备监管要求的通知》',meta:'监管通知',page:'2',title:'贷款损失准备监管要求',before:'动态调整差异化要求',quote:'拨备覆盖率监管要求由 150% 调整为 120%~150%',after:'贷款拨备率监管要求由 2.5% 调整为 1.5%~2.5%。'}]},
+  '存款准备金率最新调整？':{scenario:'bank',confidence:89,keywords:['存款准备金率','降准','人民银行'],hits:4,
+    conclusion:'当前大型金融机构存款准备金率为 10.0%，中小金融机构为 7.0%。最近一次全面降准为 2024 年 9 月，下调 0.5 个百分点。',
+    explain:'人民银行根据宏观经济与流动性状况适时调整存款准备金率，2024 年以来多次降准释放长期流动性，支持实体经济。',
+    docs:[{name:'《2024年第三季度中国货币政策执行报告》',meta:'货币政策报告',page:'9',title:'货币政策执行报告',before:'下一阶段',quote:'实施好稳健的货币政策，综合运用降准、再贷款等工具',after:'保持流动性合理充裕。'}]},
+  '杠杆率如何计算？':{scenario:'bank',confidence:93,keywords:['杠杆率','一级资本','表内外资产'],hits:3,
+    conclusion:'杠杆率 = 一级资本净额 ÷ 调整后的表内外资产余额 × 100%，商业银行杠杆率不得低于 4%。',
+    explain:'分母含表内资产与表外项目按信用转换系数折算后的余额。杠杆率是资本充足率的补充指标。',
+    docs:[{name:'《商业银行杠杆率管理办法》银监会令2015年第1号',meta:'杠杆率办法',page:'5',title:'商业银行杠杆率管理办法',before:'杠杆率计算公式为',quote:'杠杆率 = 一级资本净额 ÷ 调整后的表内外资产余额 × 100%',after:'商业银行并表和未并表的杠杆率均不得低于 4%。'}]},
+  '保险公司偿付能力充足率监管要求？':{scenario:'ins',confidence:95,keywords:['偿付能力','核心偿付','最低资本'],hits:5,
+    conclusion:'保险公司核心偿付能力充足率不低于 50%，综合偿付能力充足率不低于 100%，风险综合评级不低于 B 类。',
+    explain:'根据偿二代监管规则，偿付能力监管三支柱覆盖资本、风险与信息披露。充足率低于红线的公司将被采取监管措施。',
+    docs:[{name:'《保险公司偿付能力监管规则（Ⅱ）》（偿二代二期）',meta:'偿付能力规则',page:'4',title:'保险公司偿付能力监管规则',before:'保险公司应当满足以下最低要求',quote:'核心偿付能力充足率不低于 50%，综合偿付能力充足率不低于 100%',after:'风险综合评级（IRR）不低于 B 类。'}]},
+  '保险资金运用比例限制有哪些？':{scenario:'ins',confidence:90,keywords:['保险资金','权益类','不动产'],hits:6,
+    conclusion:'权益类资产账面余额≤上季末总资产的 30%（综合偿付能力高者可至 45%）；不动产类≤30%；单一主体股权投资≤实收资本的 50%。',
+    explain:'根据《保险资金运用管理办法》及配置政策，监管对大类资产比例设上限，并实行动态调整。',
+    docs:[{name:'《关于优化保险公司权益类资产配置监管有关事项的通知》',meta:'资金运用',page:'3',title:'权益类资产配置通知',before:'差异化权益类资产监管比例',quote:'上季末综合偿付能力充足率 350% 以上的，权益类资产账面余额不得高于上季末总资产的 45%',after:'其他公司上限为 30%。'}]},
+  '寿险责任准备金如何计提？':{scenario:'ins',confidence:92,keywords:['责任准备金','最优估计','风险边际'],hits:4,
+    conclusion:'寿险责任准备金 = 最优估计准备金 + 风险边际，并按要求计提剩余边际，采用锁定假设法摊销。',
+    explain:'根据《保险公司准备金管理办法》，准备金基于预期现金流现值计量，考虑货币时间价值与风险边际。',
+    docs:[{name:'《保险公司准备金管理办法》',meta:'准备金办法',page:'11',title:'保险公司准备金管理办法',before:'寿险责任准备金计量',quote:'寿险责任准备金 = 最优估计准备金 + 风险边际',after:'剩余边际在保单期限内按锁定假设法摊销。'}]},
+  '偿二代（Ⅱ）核心指标有哪些？':{scenario:'ins',confidence:93,keywords:['偿二代','核心指标','三支柱'],hits:5,
+    conclusion:'核心指标包括核心/综合偿付能力充足率、风险综合评级（IRR）、各类最低资本占用及压力测试覆盖率。',
+    explain:'偿二代二期构建了量化资本、定性监管、市场约束三支柱，强化穿透式监管与长期股权风险计量。',
+    docs:[{name:'《保险公司偿付能力监管规则（Ⅱ）》',meta:'监管规则',page:'2',title:'偿二代监管规则',before:'监管框架',quote:'建立量化资本要求、定性监管要求、市场约束机制三支柱框架',after:'强化穿透识别与风险计量。'}]},
+  '车险综改对保费影响如何？':{scenario:'ins',confidence:88,keywords:['车险综改','自主定价','保费'],hits:3,
+    conclusion:'车险综合改革扩大自主定价系数范围、下调附加费用率上限，整体车均保费下降约 20%，消费者让利明显。',
+    explain:'改革后交强险与商业险合并定价，无赔款优待系数优化，保费与风险更匹配。',
+    docs:[{name:'《关于实施车险综合改革的指导意见》',meta:'车险改革',page:'3',title:'车险综合改革指导意见',before:'商车险价格',quote:'引导商车险附加费用率上限由 35% 下调为 25%',after:'逐步放开自主定价系数浮动范围。'}]},
+  '再保险分保比例上限？':{scenario:'ins',confidence:90,keywords:['再保险','分出比例','承保能力'],hits:4,
+    conclusion:'保险公司对每一危险单位自留额不得超过实有资本金加公积金总和的 10%；超过部分应办理再保险。',
+    explain:'根据《保险法》及再保险监管规定，通过比例/非比例分保分散巨灾与大额风险，控制自留风险。',
+    docs:[{name:'《保险法》（再保险相关条款）',meta:'保险法',page:'28',title:'中华人民共和国保险法',before:'第一百零三条',quote:'对每一危险单位，不得超过其实有资本金加公积金总和的百分之十',after:'超过的部分应当办理再保险。'}]},
+  '信托公司净资本监管标准？':{scenario:'other',confidence:91,keywords:['信托','净资本','风险资本'],hits:4,
+    conclusion:'信托公司净资本不得低于各项风险资本之和的 100%，且净资本不得低于净资产的 40%。',
+    explain:'根据《信托公司净资本管理办法》，以净资本为核心控制固有及信托业务风险资本占用。',
+    docs:[{name:'《信托公司净资本管理办法》',meta:'净资本办法',page:'6',title:'信托公司净资本管理办法',before:'风险控制指标',quote:'净资本不得低于各项风险资本之和的 100%；净资本不得低于净资产的 40%',after:'定期报送净资本计算表。'}]},
+  '理财子公司流动性管理要求？':{scenario:'other',confidence:89,keywords:['理财子公司','流动性','认购赎回'],hits:3,
+    conclusion:'理财子公司需建立流动性风险管理制度，持有充足高流动性资产，对开放式产品实施大额认购赎回管控与摆动定价。',
+    explain:'根据《理财公司理财产品流动性风险管理办法》，按产品类型设定流动性资产比例下限。',
+    docs:[{name:'《理财公司理财产品流动性风险管理办法》',meta:'流动性办法',page:'7',title:'理财产品流动性风险管理办法',before:'流动性资产持有',quote:'开放式理财产品应当持有不低于规定比例的高流动性资产',after:'实施摆动定价与巨额赎回管控。'}]},
+  '消费金融公司资本充足率要求？':{scenario:'other',confidence:90,keywords:['消费金融','资本充足率','10.5%'],hits:3,
+    conclusion:'消费金融公司资本充足率不得低于 10.5%，同业拆入资金余额不得超过资本净额的 100%。',
+    explain:'根据《消费金融公司管理办法》，参照商业银行标准强化资本与杠杆约束。',
+    docs:[{name:'《消费金融公司管理办法》',meta:'消金办法',page:'14',title:'消费金融公司管理办法',before:'资本管理',quote:'消费金融公司资本充足率不得低于 10.5%',after:'同业拆入余额不得超过资本净额的 100%。'}]},
+  '金融租赁公司集中度限制？':{scenario:'other',confidence:88,keywords:['金融租赁','单一客户','集中度'],hits:4,
+    conclusion:'金融租赁公司对单一承租人的融资租赁资产余额不得超过资本净额的 30%，单一集团客户不得超过 50%。',
+    explain:'根据《金融租赁公司管理办法》，通过集中度指标控制大额风险暴露。',
+    docs:[{name:'《金融租赁公司管理办法》',meta:'租赁办法',page:'18',title:'金融租赁公司管理办法',before:'集中度管理',quote:'对单一承租人的融资租赁资产余额不得超过资本净额的 30%',after:'单一集团客户不得超过 50%。'}]},
+  '资管产品净值化转型要求？':{scenario:'other',confidence:92,keywords:['资管新规','净值化','打破刚兑'],hits:5,
+    conclusion:'资管产品实行净值化管理，坚持打破刚性兑付，过渡期结束后不得再发行保本保收益产品。',
+    explain:'根据《关于规范金融机构资产管理业务的指导意见》，强化公允价值计量与信息披露。',
+    docs:[{name:'《关于规范金融机构资产管理业务的指导意见》（资管新规）',meta:'资管新规',page:'9',title:'资产管理业务指导意见',before:'净值化管理',quote:'金融机构对资产管理产品应当实行净值化管理，坚持公允价值计量',after:'不得承诺保本保收益。'}]},
+  '财务公司存款准备金缴存规定？':{scenario:'other',confidence:87,keywords:['财务公司','存款准备金','缴存'],hits:3,
+    conclusion:'财务公司人民币存款按规定比例缴存存款准备金，目前执行与金融机构相适应的准备金率框架。',
+    explain:'根据人民银行相关规定，企业集团财务公司吸收的成员单位存款纳入存款准备金缴存范围。',
+    docs:[{name:'《中国人民银行关于财务公司存款准备金管理的规定》',meta:'准备金规定',page:'2',title:'财务公司准备金规定',before:'缴存范围',quote:'财务公司吸收的成员单位存款应按规定缴存存款准备金',after:'具体比例按人民银行统一规定执行。'}]}
+};
+
+// ===================== 智能问答 - SSE 流式（接入真实 Agent） =====================
+const chatInput=document.getElementById('chatInput');
+const sendBtn=document.getElementById('sendBtn');
+const answerCard=document.getElementById('answerCard');
+const bubblesWrap=document.getElementById('bubbles');
+let currentScenario='bank';
+const history=[
+  {q:'不良贷款率的计算口径是什么？',scenario:'bank',conf:94,time:'09:12'},
+  {q:'保险公司偿付能力充足率的最低监管要求？',scenario:'ins',conf:91,time:'10:05'},
+  {q:'信托产品净值化转型有哪些监管要求？',scenario:'other',conf:88,time:'11:30'},
+  {q:'资本充足率的监管计算公式是什么？',scenario:'bank',conf:96,time:'14:22'},
+  {q:'流动性覆盖率（LCR）如何计算？',scenario:'bank',conf:92,time:'15:40'}
+];
+
+// ── Agent 元信息（浅色专业风格） ──
+const AGENTS={
+  Planner:{n:'规划Agent',icon:'🧭',color:'#805ad5'},
+  Retriever:{n:'检索Agent',icon:'🔍',color:'#3182ce'},
+  Evaluator:{n:'评估Agent',icon:'📊',color:'#c9a961'},
+  Generator:{n:'生成Agent',icon:'✍️',color:'#38a169'},
+  Verifier:{n:'验证Agent',icon:'✅',color:'#319795'}
+};
+
+// ── 问答流式状态 ──
+const qaState={q:'',scenario:'bank',streaming:false,es:null,stepCount:0,evidence:[]};
+
+function renderBubbles(mode){
+  bubblesWrap.innerHTML='';
+  scenarioBubbles[mode].forEach(q=>{
+    const s=document.createElement('span');s.className='bubble';s.dataset.q=q;s.textContent=q;
+    s.addEventListener('click',()=>{chatInput.value=q;startQuery(q)});
+    bubblesWrap.appendChild(s);
+  });
+}
+
+function truncate(s,n){s=(s||'').toString();return s.length>n?s.slice(0,n)+'…':s}
+
+// ── 时间线步骤管理 ──
+function addTimelineStep(agent,status,desc,pct){
+  const wrap=document.getElementById('timelineSteps');
+  const meta=AGENTS[agent]||{n:agent,icon:'⚙️',color:'#4a5568'};
+  qaState.stepCount++;
+  const el=document.createElement('div');
+  const dotCls=status==='done'?'done':(status==='active'?'active':'pending');
+  el.className='tl-step';
+  el.dataset.agent=agent;
+  el.innerHTML=`<div class="tl-dot ${dotCls}">${qaState.stepCount}</div>
+    <div class="tl-body"><div class="tl-title">${meta.icon} ${meta.n}${pct?'<span class="pct">'+pct+'</span>':''}</div>
+    <div class="tl-desc" style="white-space:pre-wrap">${desc||''}</div></div>`;
+  wrap.appendChild(el);
+  // 进度条
+  updateProgress();
+  el.scrollIntoView({block:'nearest'});
+  return el;
+}
+
+function updateTimelineStep(agent,status,desc,pct){
+  const steps=document.querySelectorAll('#timelineSteps .tl-step');
+  let target=null;
+  for(let i=steps.length-1;i>=0;i--){if(steps[i].dataset.agent===agent){target=steps[i];break}}
+  if(!target)target=addTimelineStep(agent,status,desc,pct);
+  const dot=target.querySelector('.tl-dot');
+  dot.className='tl-dot '+(status==='done'?'done':(status==='active'?'active':'pending'));
+  const title=target.querySelector('.tl-title');
+  if(pct){title.innerHTML=title.innerHTML.split('<span')[0]+'<span class="pct">'+pct+'</span>'}
+  target.querySelector('.tl-desc').textContent=desc||'';
+  updateProgress();
+}
+
+function updateProgress(){
+  const steps=document.querySelectorAll('#timelineSteps .tl-step').length;
+  const done=document.querySelectorAll('#timelineSteps .tl-dot.done').length;
+  const pct=steps?Math.round(done/steps*100):0;
+  document.getElementById('tlProgress').style.width=Math.max(pct,5)+'%';
+}
+
+function agentStatusText(agent,data){
+  if(agent==='Planner')return '分析问题意图、判断复杂度与领域边界…';
+  if(agent==='Retriever')return '执行多通道检索，组装证据…';
+  if(agent==='Evaluator')return '评估证据充分性与可信度…';
+  if(agent==='Generator')return '基于证据生成回答…';
+  if(agent==='Verifier')return '声明级验证回答，检查证据支撑…';
+  return '执行中…';
+}
+
+function agentDecisionText(agent,decision,data){
+  if(agent==='Planner')return data.is_out_of_domain?'⚠️ 判定领域越界，终止回答':'✅ 规划完成 · 策略:'+((data.strategies||[]).join(',')||'hybrid');
+  if(agent==='Retriever')return '🔍 检索完成 · 命中证据片段';
+  if(agent==='Evaluator')return data.is_sufficient?'✅ 证据充分，可生成回答':'⚠️ 证据不足（score='+(data.sufficiency_score||0).toFixed(2)+'），建议调整检索';
+  if(agent==='Generator')return '✍️ 回答已生成';
+  if(agent==='Verifier'){
+    if(data.skipped)return '⚠️ 验证跳过：'+truncate(data.error||'',60);
+    if(data.verified)return '✅ 验证通过 · '+data.verified_count+' 条声明有证据支撑';
+    if(data.needs_retry)return '🔄 需补充检索（未验证 '+data.unverified_count+' 条）';
+    return '⚠️ 部分验证（'+data.verified_count+'/'+((data.verified_count||0)+(data.unverified_count||0))+'）';
+  }
+  return decision||'完成';
+}
+
+// ── 证据渲染（真实 evidence_items） ──
+function docPageHTML(ev){
+  const src=ev.source_doc||ev.citation||'监管制度文件';
+  const score=ev.score!=null?'<span style="color:var(--gold);font-weight:800">'+Math.round(ev.score*100)+'%</span>':'';
+  const quote=ev.evidence_snippet||truncate(ev.content||'',200);
+  const content=ev.content||'';
+  const meta=ev.hierarchy_path||ev.chunk_type||'证据片段';
+  // source_path: 原始文件相对路径，由解析器写入 chunk metadata
+  // 有 source_path 时溯源按钮可直接打开原始文件预览，无则回退到文件名搜索
+  const sourcePath=ev.source_path||(ev.metadata&&ev.metadata.source_path)||'';
+  const pathAttr=sourcePath?('data-path="'+encodeURIComponent(sourcePath)+'"'):'';
+  const sourceLabel=sourcePath?'📂 查看原文':'🔍 查找源文件';
+  return `<div class="doc-frame">
+    <div class="doc-toolbar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span style="margin-left:8px">${meta}</span><span style="margin-left:auto;font-weight:700;color:var(--primary)">${score}</span></div>
+    <div class="doc-page">
+      <div class="doc-title">${src}</div>
+      <p><span class="quote-hl">${quote}</span></p>
+      <p>${truncate(content,180)}</p>
+    </div>
+    <div class="doc-footer">
+      <span class="doc-name" title="${src}">${src}</span>
+      <button class="dl-btn" data-src="${encodeURIComponent(src)}" ${pathAttr} style="background:linear-gradient(135deg,#c9a961,#d4b06a)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-linejoin="round"/><path d="M14 2v6h6" stroke-linejoin="round"/></svg>${sourceLabel}</button>
+    </div>`;
+}
+
+function renderEvidence(items){
+  const scroll=document.getElementById('evidenceScroll');
+  document.getElementById('evidenceTag').textContent='已定位 '+items.length+' 份证据';
+  scroll.innerHTML=(items||[]).map(docPageHTML).join('');
+  bindDownload();
+}
+
+// ── 可信度更新 ──
+function updateConfidence(score){
+  const v=Math.round((score||0)*100);
+  if(v>=0&&v<=100){document.getElementById('confValue').textContent=v}
+}
+
+// ── SSE 事件分发 ──
+function onAgentEvent(evt){
+  const type=evt.type,agent=evt.agent,data=evt.data||{};
+  if(type==='agent:start'){
+    addTimelineStep(agent,'active',agentStatusText(agent,data),'');
+  }else if(type==='agent:result'){
+    updateTimelineStep(agent,'done',agentDecisionText(agent,evt.decision,data),evt.latency_ms?fmtMs(evt.latency_ms):'');
+    if(agent==='Evaluator'&&data.sufficiency_score!=null)updateConfidence(data.sufficiency_score);
+    if(agent==='Verifier'&&data.claims){renderVerifierClaims(data)}
+  }else if(type==='tool:call'){
+    const step=document.querySelector('#timelineSteps .tl-step:last-child .tl-desc');
+    if(step&&step.textContent.indexOf('🔧')<0){step.textContent+='\n🔧 调用工具 '+truncate(data.tool||'',40)}
+  }else if(type==='loop:round'){
+    addTimelineStep('Retriever','active','🔄 第 '+(data.round+1)+' 轮检索：'+truncate(data.query,40)+'\n命中 '+data.hits+' · 评分 '+(data.score!=null?data.score.toFixed(2):'—'),'');
+  }else if(type==='answer:token'){
+    appendAnswer(data.token||'');
+  }else if(type==='error'){
+    addTimelineStep(agent||'System','done','⚠️ '+truncate(data.message||'执行异常',80),'');
+  }else if(type==='done'){
+    finishQuery(data);
+  }
+}
+
+function appendAnswer(token){
+  const box=document.getElementById('conclusionText');
+  if(box.textContent==='正在检索与分析，请稍候…'||box.textContent==='')box.textContent='';
+  box.textContent+=token;
+}
+
+function renderVerifierClaims(data){
+  const claims=(data.claims||[]).slice(0,6);
+  if(!claims.length)return;
+  let txt='\n—— 声明级验证 ——\n';
+  claims.forEach(c=>{
+    txt+=(c.status==='verified'?'✅ ':'❌ ')+truncate(c.text||'',60)+(c.status==='verified'&&c.evidence_id?' ['+c.evidence_id+']':'')+'\n';
+  });
+  const step=document.querySelector('#timelineSteps .tl-step:last-child .tl-desc');
+  if(step)step.textContent+=txt;
+}
+
+function finishQuery(resp){
+  isStreamingCleanup();
+  if(!resp||!resp.answer){
+    document.getElementById('conclusionText').textContent='⚠️ 未获取到有效回答';
+    return;
+  }
+  document.getElementById('conclusionText').textContent=resp.answer;
+  document.getElementById('explainText').textContent='';
+  if(resp.sufficiency_score!=null)updateConfidence(resp.sufficiency_score);
+  if(resp.evidence_count!=null&&resp.evidence_count>0){
+    renderEvidence(resp.evidence||[].concat(resp.evidence_items||[]));
+  }
+  pushHistory(qaState.q,qaState.scenario,Math.round((resp.sufficiency_score||0)*100));
+}
+
+function isStreamingCleanup(){
+  qaState.streaming=false;
+  sendBtn.disabled=false;
+  if(qaState.es){qaState.es.close();qaState.es=null}
+  document.getElementById('tlProgress').style.width='100%';
+}
+
+function fmtMs(ms){return ms>=1000?(ms/1000).toFixed(1)+'s':Math.round(ms)+'ms'}
+
+// ── 发起 SSE 流式查询 ──
+function startQuery(q,sc){
+  if(qaState.streaming)return;
+  qaState.q=q;qaState.scenario=sc||currentScenario;
+  qaState.streaming=true;qaState.stepCount=0;qaState.evidence=[];
+  sendBtn.disabled=true;
+  // 重置回答区
+  answerCard.classList.remove('show');
+  document.getElementById('tlProgress').style.width='0%';
+  document.getElementById('timelineSteps').innerHTML='';
+  document.getElementById('questionEcho').textContent='Q: '+q;
+  document.getElementById('ansScenario').textContent=scenarioName[qaState.scenario]||'智能问答';
+  document.getElementById('conclusionText').textContent='正在检索与分析，请稍候…';
+  document.getElementById('explainText').textContent='';
+  document.getElementById('confValue').textContent='--';
+  document.getElementById('evidenceTag').textContent='检索中…';
+  document.getElementById('evidenceScroll').innerHTML='';
+  answerCard.classList.add('show');
+  document.getElementById('followupArea').classList.remove('show');
+  resetFeedback();
+  const url='/api/agent/query/stream?query='+encodeURIComponent(q);
+  qaState.es=new EventSource(url);
+  qaState.es.onmessage=function(e){let evt;try{evt=JSON.parse(e.data)}catch(err){return}onAgentEvent(evt)};
+  qaState.es.onerror=function(){isStreamingCleanup()};
+}
+
+function handleSend(){const q=chatInput.value.trim();if(!q||qaState.streaming)return;startQuery(q);chatInput.value=''}
+sendBtn.addEventListener('click',handleSend);
+chatInput.addEventListener('keydown',e=>{if(e.key==='Enter')handleSend()});
+
+function bindDownload(){
+  document.querySelectorAll('#evidenceScroll .dl-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      // 优先使用 source_path 直接溯源到原始文件（解析器写入 chunk metadata）
+      const path=b.dataset.path?decodeURIComponent(b.dataset.path):'';
+      const src=decodeURIComponent(b.dataset.src||'');
+      if(path){
+        openSourceByPath(path,src,b);
+      }else{
+        // 无 source_path 时回退到文件名搜索（向后兼容）
+        openSourceFile(src,b);
+      }
+    });
+  });
+}
+
+// ── 通过 source_path 直接打开原始文件预览（溯源链接） ──
+function openSourceByPath(path,name,btn){
+  console.log('[Trace] 溯源打开原始文件:',path);
+  if(btn){btn.textContent='📂 打开中…'}
+  // 复用文库预览抽屉，构造文件信息对象
+  const fileInfo={
+    name:name||path.split('/').pop()||'原始文件',
+    path:path,
+    ext:'.'+(path.split('.').pop()||'').toLowerCase()
+  };
+  openFilePreview(fileInfo);
+  if(btn){btn.innerHTML='📂 查看原文'}
+}
+
+// ── 打开证据对应的真实源文件（无 source_path 时的回退：文件名搜索） ──
+function openSourceFile(src,btn){
+  if(btn)btn.textContent='🔍 查找中…';
+  // 1. 用完整文件名搜索
+  fetch('/api/files/search?q='+encodeURIComponent(src))
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.items&&d.items.length){if(btn)btn.innerHTML='🔍 查找源文件';openFilePreview(d.items[0]);return}
+      // 2. 提取文件名主体（去编号前缀/扩展名）再搜
+      let body=src.replace(/\d+_/,'').replace(/\.(xls|xlsx|pdf|doc|docx)$/i,'').trim();
+      if(body&&body!==src)return fetch('/api/files/search?q='+encodeURIComponent(body)).then(r=>r.json());
+      throw new Error('no results');
+    })
+    .then(d2=>{
+      if(d2&&d2.items&&d2.items.length){if(btn)btn.innerHTML='🔍 查找源文件';openFilePreview(d2.items[0])}
+      else if(d2){if(btn)btn.innerHTML='🔍 查找源文件';alert('未在文件库中找到匹配文件：'+src+'\n\n提示：请先在制度文库上传该文档并执行解析嵌入，即可实现精确溯源。')}
+    })
+    .catch(err=>{if(btn)btn.innerHTML='🔍 查找源文件';alert('查找源文件失败：'+src)});
+}
+
+// 场景切换
+document.querySelectorAll('.scenario-card').forEach(card=>{
+  card.addEventListener('click',()=>{
+    document.querySelectorAll('.scenario-card').forEach(c=>c.classList.remove('active'));
+    card.classList.add('active');
+    currentScenario=card.dataset.scenario;
+    chatInput.placeholder=scenarioPlaceholder[currentScenario];
+    renderBubbles(currentScenario);
+  });
+});
+
+// 反馈 + 追问
+const fbBtns=document.querySelectorAll('.fb-btn');
+const followupArea=document.getElementById('followupArea');
+function resetFeedback(){fbBtns.forEach(b=>b.classList.remove('active'))}
+fbBtns.forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    resetFeedback();btn.classList.add('active');
+    followupArea.classList.add('show');
+    const inputs={accurate:'感谢反馈，回答已标记为准确，将用于优化模型。',inaccurate:'请指出不准确之处，我们将重新检索校验并给出修正。',improve:'请描述改进建议，系统会结合追问进行答案优化。'};
+    document.getElementById('followInput').placeholder=inputs[btn.dataset.type];
+    const sugs={accurate:['补充最新数据来源','附上计算示例'],inaccurate:['哪部分口径有误？','应引用哪份文件？'],improve:['分子是否含贸易融资？','报送频率是月报还是季报？']};
+    document.getElementById('followSugs').innerHTML='<span>推荐追问：</span>'+sugs[btn.dataset.type].map(s=>`<span class="mini-bubble">${s}</span>`).join('');
+  });
+});
+document.getElementById('followBtn').addEventListener('click',()=>{
+  const val=document.getElementById('followInput').value.trim();if(!val)return;
+  document.getElementById('conclusionText').innerHTML+='<br><span style="color:var(--gold);font-weight:700">【追问补充】</span> 经二次检索与对抗校验，补充说明：贴现业务按票面金额计入各项贷款余额，逾期90天以上贷款应至少归为关注类。';
+  const old=parseInt(document.getElementById('confValue').textContent);
+  document.getElementById('confValue').textContent=Math.min(old+2,99);
+  document.getElementById('followInput').value='';
+});
+
+// ===================== 历史问答（移到工作台显示） =====================
+function pushHistory(q,scenario,conf){
+  if(history.some(h=>h.q===q)){renderWbHistory();return}
+  history.unshift({q,scenario,conf,time:new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})});
+  renderWbHistory();
+}
+function renderWbHistory(){
+  const list=document.getElementById('wbHistoryList');
+  if(!history.length){list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px">暂无历史问答记录，前往「智能问答」开始提问</div>';return}
+  const colors={bank:'#1a3a5c',ins:'#319795',other:'#805ad5'};
+  list.innerHTML=history.map(h=>`<div class="his-item" onclick="location.href='#chat';document.querySelector('[data-view=\\'chat\\']').click()">
+    <div class="his-q">${h.q}</div>
+    <div class="his-meta">
+      <span class="his-cat" style="background:${colors[h.scenario]}15;color:${colors[h.scenario]}">${scenarioName[h.scenario]}</span>
+      <span class="his-time">${h.time}</span>
+      <span class="his-conf">${h.conf}%</span>
+    </div>
+  </div>`).join('');
+}
+
+// ===================== 制度文库 - 真实文件浏览 =====================
+let currentFileDir='';
+const fileTypeIcons={xls:'XLS',xlsx:'XLS',pdf:'PDF',doc:'DOC',docx:'DOC'};
+const fileTypeColor={xls:'#38a169',xlsx:'#38a169',pdf:'#e53e3e',doc:'#3182ce',docx:'#3182ce'};
+
+function loadFileTree(){
+  fetch('/api/files/tree').then(r=>r.json()).then(tree=>{
+    renderFileTree(tree);
+    openFileDir('');
+  }).catch(err=>console.log('文件树加载失败:',err));
+}
+function countFiles(node){let n=(node.files||[]).length;(node.dirs||[]).forEach(d=>n+=countFiles(d));return n}
+function renderFileTree(tree){
+  const box=document.getElementById('fileTree');box.innerHTML='';
+  box.appendChild(buildTreeNode({name:'全部文件',path:''},tree,0));
+}
+function buildTreeNode(meta,node,depth){
+  const wrap=document.createElement('div');wrap.className='tree-group';
+  const root=document.createElement('div');root.className='tree-root'+(depth===0?' active':'');
+  root.style.paddingLeft=((depth||0)*16+4)+'px';
+  const toggle=document.createElement('span');toggle.className='tree-toggle';toggle.textContent='▶';
+  const icon=document.createElement('span');icon.className='tree-icon';
+  icon.style.background=(node&&node.dirs&&node.dirs.length)?'linear-gradient(135deg,#1a3a5c,#2c5282)':'linear-gradient(135deg,#c9a961,#d4b06a)';
+  icon.textContent='📁';
+  const label=document.createElement('span');label.textContent=meta.name;label.style.flex='1';
+  const count=document.createElement('span');count.className='count';count.textContent=countFiles(node);
+  root.appendChild(toggle);root.appendChild(icon);root.appendChild(label);root.appendChild(count);
+  root.addEventListener('click',function(){openFileDir(meta.path,root)});
+  toggle.addEventListener('click',function(e){e.stopPropagation();toggle.textContent=toggle.textContent==='▶'?'▼':'▶'});
+  wrap.appendChild(root);
+  if(node&&node.dirs&&node.dirs.length){
+    const children=document.createElement('div');children.className='tree-children';
+    node.dirs.forEach(function(d){children.appendChild(buildTreeNode({name:d.name,path:d.path},d,depth+1))});
+    wrap.appendChild(children);
+  }
+  return wrap;
+}
+function openFileDir(path,el){
+  if(el){document.querySelectorAll('#fileTree .tree-root').forEach(function(r){r.classList.remove('active')});el.classList.add('active')}
+  currentFileDir=path||'';
+  fetch('/api/files/list?dir='+encodeURIComponent(path||'')).then(function(r){return r.json()})
+    .then(function(d){renderFileList(d)}).catch(function(err){console.log('文件列表加载失败:',err)});
+}
+function renderFileList(d){
+  document.getElementById('fileCurrentDir').textContent=d.dir||'文件库';
+  const grid=document.getElementById('fileGrid');grid.innerHTML='';
+  const total=(d.dirs||[]).length+(d.files||[]).length;
+  document.getElementById('fileCount').textContent=total+' 项';
+  if(d.dir&&d.dir!==''){
+    const parent=d.dir.split('/').slice(0,-1).join('/');
+    grid.appendChild(renderDirCard('⬆ 返回上级',parent));
+  }
+  (d.dirs||[]).forEach(function(dir){grid.appendChild(renderDirCard(dir.name,dir.path))});
+  (d.files||[]).forEach(function(f){grid.appendChild(renderFileCard(f))});
+}
+function renderDirCard(name,path){
+  const card=document.createElement('div');card.className='doc-card';card.style.cursor='pointer';
+  card.innerHTML='<div class="doc-card-head"><div class="doc-file-icon" style="background:linear-gradient(135deg,#1a3a5c,#2c5282)">📁</div>'+
+    '<div class="doc-card-info"><h4>'+name+'</h4><div class="source">目录</div></div></div>'+
+    '<div class="doc-card-foot"><span style="font-size:11px;color:var(--text-muted)">点击进入</span></div>';
+  card.addEventListener('click',function(){openFileDir(path)});
+  return card;
+}
+function renderFileCard(f){
+  const ext=(f.ext||'').replace('.','')||'file';
+  const color=fileTypeColor[ext]||'#718096';
+  const card=document.createElement('div');card.className='doc-card';
+  card.innerHTML='<div class="doc-card-head"><div class="doc-file-icon" style="background:'+color+'">'+(fileTypeIcons[ext]||ext).toUpperCase()+'</div>'+
+    '<div class="doc-card-info"><h4>'+f.name+'</h4><div class="source">'+f.size_human+'</div></div></div>'+
+    '<div class="doc-card-foot"><span style="font-size:11px;color:var(--text-muted)">'+f.ext+'</span>'+
+    '<div class="doc-card-actions">'+
+    '<div class="dca view" title="预览"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>'+
+    '<div class="dca dl" title="下载"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg></div>'+
+    '</div></div>';
+  card.querySelector('.dca.view').addEventListener('click',function(){openFilePreview(f)});
+  card.querySelector('.dca.dl').addEventListener('click',function(){downloadFile(f)});
+  return card;
+}
+function openFilePreview(f){
+  document.getElementById('fpTitle').textContent=f.name;
+  document.getElementById('fpFrame').src='/api/files/preview?path='+encodeURIComponent(f.path);
+  document.getElementById('fpDownloadBtn').onclick=function(){downloadFile(f)};
+  document.getElementById('fpOverlay').classList.add('show');
+}
+function closePreview(e){
+  if(e&&e.target!==document.getElementById('fpOverlay'))return;
+  document.getElementById('fpOverlay').classList.remove('show');
+}
+function downloadFile(f){
+  window.open('/api/files/download?path='+encodeURIComponent(f.path),'_blank');
+}
+function fileSearchHandler(e){
+  if(e.key==='Enter'){
+    const q=document.getElementById('fileSearch').value.trim();
+    if(q)searchFiles(q);
+  }
+}
+function searchFiles(q){
+  fetch('/api/files/search?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){
+    const grid=document.getElementById('fileGrid');
+    document.getElementById('fileCurrentDir').textContent='搜索结果';
+    document.getElementById('fileCount').textContent=d.items.length+' 项';
+    grid.innerHTML='';d.items.forEach(function(f){grid.appendChild(renderFileCard(f))});
+  }).catch(function(err){console.log('搜索失败:',err)});
+}
+
+// ===================== 制度文库 - 上传/新建文件夹/解析嵌入 =====================
+function uploadFileDialog(){
+  // 创建隐藏的 file input 触发选择
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='.xls,.xlsx,.pdf,.doc,.docx,.txt,.csv,.md,.json,.jsonl';
+  input.multiple=false;
+  input.style.display='none';
+  document.body.appendChild(input);
+  input.addEventListener('change',function(){
+    const file=input.files&&input.files[0];
+    if(!file){document.body.removeChild(input);return}
+    uploadSingleFile(file);
+    document.body.removeChild(input);
+  });
+  input.click();
+}
+function uploadSingleFile(file){
+  console.log('[Upload] 开始上传:',file.name,'到目录:',currentFileDir,'大小:',file.size);
+  const reader=new FileReader();
+  reader.onload=function(e){
+    // FileReader.readAsDataURL 返回 "data:...;base64,XXXX"，需截取 base64 部分
+    const dataUrl=e.target.result||'';
+    const commaIdx=dataUrl.indexOf(',');
+    const b64=commaIdx>=0?dataUrl.substring(commaIdx+1):'';
+    if(!b64){alert('文件读取失败');return}
+    fetch('/api/files/upload',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        filename:file.name,
+        content:b64,
+        dir:currentFileDir||'',
+        overwrite:false
+      })
+    }).then(r=>r.json()).then(d=>{
+      if(d&&d.path){
+        console.log('[Upload] ✅ 上传成功:',d.path);
+        alert('✅ 上传成功：'+d.path+'\n'+(d.hint||''));
+        // 刷新当前目录文件列表
+        openFileDir(currentFileDir);
+        // 刷新左侧文件树（更新计数）
+        loadFileTree();
+      }else{
+        alert('❌ 上传失败：'+(d&&d.detail||'未知错误'));
+      }
+    }).catch(err=>{
+      console.error('[Upload] 上传异常:',err);
+      alert('❌ 上传异常：'+err.message);
+    });
+  };
+  reader.onerror=function(){alert('文件读取失败')};
+  reader.readAsDataURL(file);
+}
+function mkdirDialog(){
+  const name=prompt('请输入新文件夹名称：','');
+  if(!name||!name.trim())return;
+  const trimmed=name.trim();
+  console.log('[Mkdir] 创建文件夹:',trimmed,'父目录:',currentFileDir);
+  fetch('/api/files/mkdir',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({dir:currentFileDir||'',name:trimmed})
+  }).then(r=>r.json()).then(d=>{
+    if(d&&d.path){
+      console.log('[Mkdir] ✅ 文件夹创建成功:',d.path);
+      alert('✅ 文件夹创建成功：'+d.path);
+      loadFileTree();
+      openFileDir(currentFileDir);
+    }else{
+      alert('❌ 创建失败：'+(d&&d.detail||'未知错误'));
+    }
+  }).catch(err=>{
+    console.error('[Mkdir] 异常:',err);
+    alert('❌ 创建异常：'+err.message);
+  });
+}
+function parseCurrentDir(){
+  const target=currentFileDir||'(整个文库)';
+  if(!confirm('将对 "'+target+'" 执行解析嵌入操作。\n解析器会提取文档内容生成 chunks，并触发检索服务索引重建。\n\n确认继续？'))return;
+  console.log('[Parse] 开始解析嵌入:',target);
+  // 显示进度提示（简单实现：禁用按钮 + 改文字）
+  const btn=event&&event.target;
+  const origText=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='⚙ 解析中…'}
+  fetch('/api/files/parse',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:currentFileDir||null,force:false})
+  }).then(r=>r.json()).then(d=>{
+    if(btn){btn.disabled=false;btn.textContent=origText}
+    console.log('[Parse] 解析结果:',d);
+    const parseInfo=d.parse||{};
+    const reloadInfo=d.reload||{};
+    let msg='解析嵌入流程已完成\n';
+    msg+='目标：'+(d.target||target)+'\n';
+    msg+='生成 chunks 文件数：'+(parseInfo.chunks_generated||0)+'\n';
+    if(parseInfo.warning)msg+='⚠️ '+parseInfo.warning+'\n';
+    msg+='检索服务索引重建：'+(reloadInfo.ok?'✅ 成功':'❌ '+(reloadInfo.detail||'失败'))+'\n';
+    msg+='\n'+(d.hint||'');
+    alert(msg);
+  }).catch(err=>{
+    if(btn){btn.disabled=false;btn.textContent=origText}
+    console.error('[Parse] 异常:',err);
+    alert('❌ 解析异常：'+err.message);
+  });
+}
+// 初始化文件浏览
+loadFileTree();
+
+// ===================== 报表检索 =====================
+const reports=[
+  {t:'1104报表',n:'G01 资产负债项目统计表',m:'2026-07 · 已校验'},
+  {t:'监管指标',n:'G11 资产质量五级分类表',m:'2026-07 · 已校验'},
+  {t:'人行大集中',n:'大集中 A1411 资产负债表',m:'2026-07 · 待复核'},
+  {t:'内部报表',n:'分支机构存贷款日报',m:'2026-08-13 · 已生成'},
+  {t:'1104报表',n:'G21 流动性期限缺口表',m:'2026-07 · 已校验'},
+  {t:'保险监管',n:'S01 保险公司业务统计表',m:'2026-07 · 已校验'},
+  {t:'监管指标',n:'G41 资本充足率汇总表',m:'2026-07 · 已校验'},
+  {t:'内部管理',n:'理财净值型产品月度报告',m:'2026-08 · 待报送'},
+  {t:'信托报表',n:'信托业务三分类统计表',m:'2026-07 · 已生成'}
+];
+document.getElementById('reportGrid').innerHTML=reports.map(r=>`<div class="report-card"><div class="type">${r.t}</div><h4>${r.n}</h4><div class="meta"><span>${r.m.split(' · ')[0]}</span><span>${r.m.split(' · ')[1]}</span></div></div>`).join('');
+
+// ===================== 热点推送 =====================
+const calEvents=[
+  {d:'08-15',ev:'7月金融统计数据',org:'人民银行',c:'var(--primary)'},
+  {d:'08-18',ev:'二季度银行业监管指标',org:'金融监管总局',c:'var(--primary)'},
+  {d:'08-20',ev:'保险资金运用月报',org:'保险行业协会',c:'var(--teal)'},
+  {d:'08-22',ev:'7月社融与信贷数据',org:'人民银行',c:'var(--primary)'},
+  {d:'08-25',ev:'信托业务月度统计',org:'信托业协会',c:'var(--purple)'},
+  {d:'08-28',ev:'理财市场半年报',org:'理财登记中心',c:'var(--purple)'},
+  {d:'09-01',ev:'8月PMI数据',org:'统计局',c:'var(--error)'}
+];
+document.getElementById('calRow').innerHTML=calEvents.map(e=>`<div class="cal-card"><div class="cal-date">${e.d}</div><div class="cal-event"><span class="cal-dot" style="background:${e.c}"></span>${e.ev}</div><div class="cal-org">${e.org}</div></div>`).join('');
+document.getElementById('refreshHot').addEventListener('click',()=>{alert('已刷新热点：检测到 3 条新增监管动态，1 条数据统计待发布。');});
+
+// ===================== 工作台 =====================
+(function(){
+  const days=['一','二','三','四','五','六','日'];const today=13;const hasDays=[5,12,13,18,25];
+  let html='<div class="wd">'+days.map(d=>'<span>'+d+'</span>').join('')+'</div>';
+  for(let i=1;i<=31;i++){
+    const cls=i===today?'today':(hasDays.includes(i)?'has':'');
+    html+=`<div class="d ${cls}">${i}</div>`;
+  }
+  document.getElementById('miniCal').innerHTML=html;
+  document.getElementById('favList').innerHTML=[
+    '商业银行资本管理办法','保险公司偿付能力监管规则（Ⅱ）','1104报表填报操作指引','信托公司净资本管理办法'
+  ].map(f=>`<div class="fav-item" onclick="alert('打开收藏：${f}')"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" stroke="#c9a961" stroke-width="1.5"><path d="M12 2l3 7h7l-5 5 2 7-7-4-7 4 2-7-5-5h7z" stroke-linejoin="round"/></svg><span>${f}</span></div>`).join('');
+
+  // 最近查询
+  const recentQ=[{n:'G11 资产质量五级分类表',t:'今天 09:12',c:'var(--primary)'},{n:'S01 保险公司业务统计表',t:'今天 08:40',c:'var(--teal)'},{n:'大集中 A1411 资产负债表',t:'昨天 16:30',c:'var(--primary)'},{n:'理财净值型产品月度报告',t:'08-11',c:'var(--purple)'},{n:'信托业务三分类统计表',t:'08-10',c:'var(--purple)'}];
+  document.getElementById('recentList').innerHTML=recentQ.map(q=>`<div class="recent-item" onclick="alert('重新查询：${q.n}')"><span class="ri-dot" style="background:${q.c}"></span><span class="ri-name">${q.n}</span><span class="ri-time">${q.t}</span></div>`).join('');
+
+  document.querySelectorAll('.qt').forEach(qt=>qt.addEventListener('click',()=>{
+    const map={calc:'指标速算器',tpl:'报表模板库',conv:'口径换算工具',exp:'导出分析报告'};
+    alert('打开快捷工具：'+map[qt.dataset.tool]);
+  }));
+})();
+
+// ===================== 初始化 =====================
+renderBubbles('bank');
+// 初始不自动查询（SSE 流式），用户点击示例气泡或输入后触发
+renderWbHistory();
+
+// ── 加载真实知识库状态（右侧面板） ──
+function loadKbStatus(){
+  fetch('/api/agent/health')
+    .then(r=>r.ok?r.json():Promise.reject('HTTP '+r.status))
+    .then(d=>{
+      if(d.docs!=null){
+        const num=document.querySelector('.kb-number');
+        if(num)num.textContent=d.docs;
+        const meta=document.querySelector('.kb-meta');
+        if(meta)meta.textContent=d.chunks!=null?d.chunks+' 个分块已索引':'份文件已入库';
+      }
+    })
+    .catch(err=>console.log('知识库状态加载失败:',err));
+}
+// ── 加载工作台最近查询（历史对话） ──
+function loadRecentFromBackend(){
+  fetch('/api/agent/conversations?page=1&page_size=8')
+    .then(r=>r.ok?r.json():Promise.reject('HTTP '+r.status))
+    .then(d=>{
+      const items=(d.items||[]).filter(i=>i&&i.query);
+      if(!items.length)return;
+      const list=document.getElementById('recentList');
+      if(list)list.innerHTML=items.map(c=>`<div class="recent-item" onclick="document.querySelector('[data-view=\\'chat\\']').click()">
+        <span class="ri-dot" style="background:var(--primary-light)"></span><span class="ri-name">${c.query}</span>
+        <span class="ri-time">${(c.created_at||'').slice(5,16)||''}</span></div>`).join('');
+    })
+    .catch(err=>console.log('历史对话加载失败:',err));
+}
+
+loadKbStatus();
+loadRecentFromBackend();
+</script>
+</body>
+</html>

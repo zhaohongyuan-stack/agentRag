@@ -39,6 +39,16 @@ class QueryResponse(BaseModel):
     ambiguities: List[Dict[str, Any]] = Field(
         default_factory=list, description="检测到的歧义"
     )
+    state_trace_detail: Optional[List[Dict[str, Any]]] = Field(
+        None, description="状态轨迹增强详情（含层级、标签、描述、耗时）"
+    )
+
+    # ── Phase 5/6: Agent 协作可视化数据 ──
+    loop_count: int = Field(0, description="检索-评估 Loop 轮次（0=单轮）")
+    agent_decisions: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Agent 决策列表，每项 {agent, decision, latency_ms, detail, round}",
+    )
 
 
 class HealthResponse(BaseModel):
@@ -47,3 +57,62 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     service: str = "agent-platform"
     version: str = "1.0.0-phase1"
+    docs: Optional[int] = None
+    chunks: Optional[int] = None
+
+
+# ============================================================
+# 认证相关模型
+# ============================================================
+class LoginRequest(BaseModel):
+    """登录请求"""
+
+    username: str = Field(..., description="用户名")
+    password: str = Field(..., description="密码")
+
+
+class LoginResponse(BaseModel):
+    """登录响应"""
+
+    token: str = Field(..., description="JWT token")
+    user: Dict[str, Any] = Field(..., description="用户信息")
+
+
+# ============================================================
+# 对话持久化相关模型
+# ============================================================
+class ConversationCreate(BaseModel):
+    """创建对话记录请求"""
+
+    session_id: str = Field(..., description="会话 ID")
+    query: str = Field(..., description="用户原始问题")
+    response: Dict[str, Any] = Field(..., description="QueryResponse 的字典形式")
+
+
+class ReviewCreate(BaseModel):
+    """提交审查请求"""
+
+    review_status: str = Field(
+        ...,
+        description="审查状态: correct / incorrect / needs_improvement",
+    )
+    review_comment: str = Field(
+        ..., min_length=10, description="审查评论（最少 10 字符）"
+    )
+
+
+class SuggestionCreate(BaseModel):
+    """添加改进建议请求"""
+
+    suggestion_text: str = Field(
+        ..., min_length=1, description="建议内容"
+    )
+
+
+class QARequest(BaseModel):
+    """管理员质检标注请求"""
+
+    qa_result: str = Field(
+        ..., description="质检结果: pass / fail / rework"
+    )
+    qa_comment: str = Field("", description="质检评论")

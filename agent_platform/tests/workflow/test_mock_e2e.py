@@ -84,8 +84,8 @@ class TestMockE2E:
 
         # 应检测到歧义
         if response.ambiguities:
-            # 状态轨迹应包含 CLARIFYING
-            assert "CLARIFYING" in response.state_trace
+            # 状态轨迹应包含 REFUSING（先检索后澄清策略：证据不足时经 REFUSING -> RESPONDING 澄清）
+            assert "REFUSING" in response.state_trace
             # 回答应包含澄清提示
             assert "澄清" in response.answer or "歧义" in response.answer or "明确" in response.answer
 

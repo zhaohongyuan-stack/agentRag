@@ -49,7 +49,9 @@ class RewrittenQuery:
     """用户原始查询文本"""
 
     contextualized_query: str
-    """指代消解后的查询文本（无会话上下文时与原始查询相同）"""
+    """指代消解后的查询文本（无会话上下文时与原始查询相同）。
+    如果含选项且为数值型，此处为去除选项后的纯净查询；
+    如果含选项且为文本型，此处为增强后（含选项文本）的查询。"""
 
     channel_queries: Dict[str, str] = field(default_factory=dict)
     """各检索通道专用查询文本: {lexical: ..., dense: ..., exact: ...}"""
@@ -63,6 +65,19 @@ class RewrittenQuery:
     ambiguity_reason: str = ""
     """歧义原因描述（无歧义时为空字符串）"""
 
+    # ── 选项处理字段 ──
+    options: List[Dict[str, Any]] = field(default_factory=list)
+    """提取的选项列表，格式 [{"label": "A", "text": "...", "type": "numeric/textual"}]"""
+
+    option_set_type: str = "none"
+    """选项集类型: "numeric"(全部数值) | "textual"(含文本表述) | "none"(无选项)"""
+
+    prompt_mode: str = "normal"
+    """生成模式: "normal" | "calculate_and_match"(数值计算型) | "verify_each_option"(事实判断型)"""
+
+    clean_query: str = ""
+    """去除选项后的纯净问题文本（不含选项），用于 LLM 生成的 question 字段"""
+
     def to_dict(self) -> dict:
         return {
             "original_query": self.original_query,
@@ -71,6 +86,10 @@ class RewrittenQuery:
             "rewrites": list(self.rewrites),
             "ambiguity_flagged": self.ambiguity_flagged,
             "ambiguity_reason": self.ambiguity_reason,
+            "options": list(self.options),
+            "option_set_type": self.option_set_type,
+            "prompt_mode": self.prompt_mode,
+            "clean_query": self.clean_query,
         }
 
 
@@ -134,8 +153,33 @@ class QueryRewriter:
         ambiguity_flagged = False
         ambiguity_reason = ""
 
+        # ── 步骤 0: 选项提取与分类 ──
+        options, clean_query = self._extract_options(query)
+        option_set_type = self._classify_option_set(options)
+
+        if option_set_type == "numeric":
+            # 数值计算型：剥离选项，用清洁查询检索
+            search_query = clean_query
+            prompt_mode = "calculate_and_match"
+            logger.info(
+                "[选项处理] 数值计算型 → 剥离 %d 个选项，clean_query='%s'",
+                len(options), clean_query[:80],
+            )
+        elif option_set_type == "textual":
+            # 事实判断型：保留选项文本，增强检索查询
+            search_query = self._build_enhanced_query(clean_query, options)
+            prompt_mode = "verify_each_option"
+            logger.info(
+                "[选项处理] 事实判断型 → 增强 %d 个选项，search_query='%s'",
+                len(options), search_query[:80],
+            )
+        else:
+            # 无选项：正常流程
+            search_query = query
+            prompt_mode = "normal"
+
         # ── 步骤 1: 指代消解 ──
-        contextualized = query
+        contextualized = search_query
         # 仅当存在会话历史时才执行指代消解（首次查询无需 LLM 调用）
         _has_context = session_context is not None and (
             session_context.previous_queries
@@ -158,6 +202,19 @@ class QueryRewriter:
         # ── 步骤 2: 同义词扩展 ──
         expanded = self._synonym_dict.expand_query(contextualized)
 
+        # ── 步骤 2b: 注入消歧后的术语扩展 ──
+        if query_spec is not None:
+            resolved_terms = getattr(query_spec, "resolved_terms", None)
+            if resolved_terms:
+                for term, info in resolved_terms.items():
+                    meaning = info.get("resolved_meaning", "")
+                    # 如果原查询包含多义术语但不含消歧后的含义词，补充注入
+                    if term in contextualized and meaning and meaning not in contextualized:
+                        contextualized = contextualized.replace(term, f"{term}（{meaning}）")
+                        # 同步更新 expanded
+                        if term in expanded and meaning not in expanded:
+                            expanded = expanded.replace(term, f"{term}（{meaning}）")
+
         # ── 步骤 3: 生成通道查询 ──
         channel_queries = self._generate_channel_queries(
             contextualized, expanded, query_spec
@@ -173,6 +230,10 @@ class QueryRewriter:
             rewrites=rewrites,
             ambiguity_flagged=ambiguity_flagged,
             ambiguity_reason=ambiguity_reason,
+            options=options,
+            option_set_type=option_set_type,
+            prompt_mode=prompt_mode,
+            clean_query=clean_query if clean_query else original_query,
         )
 
     # ============================================================
@@ -358,6 +419,120 @@ class QueryRewriter:
         elif isinstance(query_spec, dict):
             return query_spec.get("entities", [])
         return []
+
+    # ============================================================
+    # 选项提取与分类
+    # ============================================================
+
+    # 选项边界：匹配 "选项A：" / "A." / "A、" / "(A) " 等
+    _OPTION_BOUNDARY = re.compile(
+        r'(?:选项)?[（(]?\s*([A-D])\s*[）)、．.：:]'
+    )
+
+    def _extract_options(self, query: str) -> tuple:
+        """
+        从查询中提取选项并返回清洁查询
+
+        定位所有选项边界（A/B/C/D 标签），通过相邻边界截取每个选项的完整文本。
+
+        Args:
+            query: 用户原始查询
+
+        Returns:
+            (options, clean_query) 元组
+            options: [{"label": "A", "text": "...", "type": "numeric/textual"}, ...]
+            clean_query: 去除选项后的问题文本
+        """
+        matches = list(self._OPTION_BOUNDARY.finditer(query))
+        if len(matches) < 2:
+            return [], query
+
+        options = []
+        for i, match in enumerate(matches):
+            label = match.group(1)
+            start = match.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(query)
+            text = query[start:end].strip().rstrip("。，、；")
+
+            options.append({
+                "label": label,
+                "text": text,
+                "type": self._classify_option(text),
+            })
+
+        # 清洁查询：截取第一个选项边界之前的部分
+        clean_end = matches[0].start()
+        clean_query = query[:clean_end].strip().rstrip("。，、；")
+
+        return options, clean_query
+
+    def _classify_option(self, text: str) -> str:
+        """
+        判断单个选项是数值型还是文本型
+
+        去掉常见单位后，判断剩余部分是否为纯数字。
+
+        Args:
+            text: 选项文本
+
+        Returns:
+            "numeric" 或 "textual"
+        """
+        cleaned = text.strip()
+        # 去除常见单位
+        cleaned = re.sub(
+            r"(亿元|万亿|亿|万|元|百分比|百分点|个点|%)", "", cleaned
+        ).strip()
+        # 去除首尾标点
+        cleaned = cleaned.strip("，。、；：")
+        # 判断是否为数字（含负号、小数点、千分位逗号）
+        if re.match(r"^[-+]?\d{1,3}(?:,\d{3})*(?:\.\d+)?$", cleaned) or \
+           re.match(r"^[-+]?\d+(?:\.\d+)?$", cleaned):
+            return "numeric"
+        return "textual"
+
+    def _classify_option_set(self, options: List[Dict[str, Any]]) -> str:
+        """
+        判断选项集类型
+
+        保守策略：只要有一个非数值选项就归为 textual，避免误剥离。
+
+        Args:
+            options: 选项列表
+
+        Returns:
+            "numeric": 全部选项为数值（剥离选项，独立计算）
+            "textual": 含文本表述（保留选项，逐条验证）
+            "none":    无选项
+        """
+        if not options:
+            return "none"
+
+        numeric_count = sum(1 for o in options if o.get("type") == "numeric")
+        if numeric_count == len(options):
+            return "numeric"
+        return "textual"
+
+    def _build_enhanced_query(
+        self, clean_query: str, options: List[Dict[str, Any]]
+    ) -> str:
+        """
+        将问题主干与选项文本拼接为增强检索查询
+
+        用于事实判断型问题：选项文本（"750日移动平均""流动性溢价"等）
+        是检索锚点，拼接后 BM25/Dense 可命中包含这些具体表述的 chunk。
+
+        Args:
+            clean_query: 去除选项后的问题主干
+            options: 选项列表
+
+        Returns:
+            增强后的检索查询
+        """
+        option_texts = [opt.get("text", "") for opt in options if opt.get("text")]
+        stem = clean_query.rstrip("？?。")
+        enhanced = f"{stem} {' '.join(option_texts)}"
+        return enhanced
 
     # ============================================================
     # 辅助方法

@@ -35,6 +35,7 @@ class ConflictType(Enum):
     SCOPE_OVERLAP = "适用范围重叠"
     AUTHORITY_CONFLICT = "效力冲突"
     TEMPORAL_CONFLICT = "时效冲突"
+    TABLE_PARTITION_CONFLICT = "表格分区冲突"
 
 
 # 冲突优先级（不自动解决，按以下顺序展示）
@@ -46,6 +47,7 @@ CONFLICT_PRIORITY: Dict[ConflictType, int] = {
     ConflictType.TEMPORAL_CONFLICT: 3,    # 时效冲突（生效日期）
     ConflictType.SCOPE_OVERLAP: 4,        # 适用范围重叠
     ConflictType.NUMERIC_MISMATCH: 5,     # 数值不一致
+    ConflictType.TABLE_PARTITION_CONFLICT: 6,  # 表格分区冲突（最低优先级）
 }
 
 # 默认优先级（用于未在 CONFLICT_PRIORITY 中显式登记的类型）

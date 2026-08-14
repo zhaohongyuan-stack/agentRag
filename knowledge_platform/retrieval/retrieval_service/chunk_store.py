@@ -40,6 +40,7 @@ class ChunkMeta:
     doc_title: str = ""
     hierarchy_path: str = ""
     source_file: str = ""
+    source_path: str = ""   # 原始文件相对路径（供前端溯源链接使用）
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -51,6 +52,7 @@ class ChunkMeta:
             "doc_title": self.doc_title,
             "hierarchy_path": self.hierarchy_path,
             "source_file": self.source_file,
+            "source_path": self.source_path,
             "metadata": self.metadata,
         }
 
@@ -91,10 +93,11 @@ class ChunkStore:
         self._chunk_id_list.clear()
 
         # ── 第一遍：加载所有元信息 ──
-        # 同时收集 doc_id → doc_name / doc_title / source_file 映射
+        # 同时收集 doc_id → doc_name / doc_title / source_file / source_path 映射
         doc_name_map: Dict[str, str] = {}
         doc_title_map: Dict[str, str] = {}
         source_file_map: Dict[str, str] = {}
+        source_path_map: Dict[str, str] = {}
 
         for chunk in chunks:
             # 兼容 Chunk 对象和 dict
@@ -103,6 +106,8 @@ class ChunkStore:
                 doc_name = chunk.get("doc_name", "")
                 doc_title = chunk.get("doc_title", "")
                 source_file = chunk.get("source_file", chunk.get("source", ""))
+                # source_path 优先取顶层，兜底取 metadata.source_path
+                source_path = chunk.get("source_path", "") or (chunk.get("metadata") or {}).get("source_path", "")
                 meta = ChunkMeta(
                     chunk_id=chunk.get("chunk_id", ""),
                     chunk_type=chunk.get("chunk_type", "clause"),
@@ -111,6 +116,7 @@ class ChunkStore:
                     doc_title=doc_title,
                     hierarchy_path=chunk.get("hierarchy_path", ""),
                     source_file=source_file,
+                    source_path=source_path,
                     metadata=chunk.get("metadata", {}),
                 )
             else:
@@ -118,6 +124,7 @@ class ChunkStore:
                 doc_name = getattr(chunk, "doc_name", "")
                 doc_title = getattr(chunk, "doc_title", "")
                 source_file = getattr(chunk, "source_file", "")
+                source_path = getattr(chunk, "source_path", "") or (getattr(chunk, "metadata", {}) or {}).get("source_path", "")
                 meta = ChunkMeta(
                     chunk_id=getattr(chunk, "chunk_id", ""),
                     chunk_type=getattr(chunk, "chunk_type", "clause"),
@@ -126,21 +133,24 @@ class ChunkStore:
                     doc_title=doc_title,
                     hierarchy_path=getattr(chunk, "hierarchy_path", ""),
                     source_file=source_file,
+                    source_path=source_path,
                     metadata=getattr(chunk, "metadata", {}),
                 )
 
             self._meta_map[meta.chunk_id] = meta
             self._chunk_id_list.append(meta.chunk_id)
 
-            # 收集非空的 doc_name / doc_title / source_file（首个非空值优先）
+            # 收集非空的 doc_name / doc_title / source_file / source_path（首个非空值优先）
             if doc_id and doc_name and doc_id not in doc_name_map:
                 doc_name_map[doc_id] = doc_name
             if doc_id and doc_title and doc_id not in doc_title_map:
                 doc_title_map[doc_id] = doc_title
             if doc_id and source_file and doc_id not in source_file_map:
                 source_file_map[doc_id] = source_file
+            if doc_id and source_path and doc_id not in source_path_map:
+                source_path_map[doc_id] = source_path
 
-        # ── 第二遍：回填空缺的 doc_name / doc_title / source_file ──
+        # ── 第二遍：回填空缺的 doc_name / doc_title / source_file / source_path ──
         filled = 0
         for meta in self._meta_map.values():
             changed = False
@@ -153,12 +163,15 @@ class ChunkStore:
             if not meta.source_file and meta.doc_id in source_file_map:
                 meta.source_file = source_file_map[meta.doc_id]
                 changed = True
+            if not meta.source_path and meta.doc_id in source_path_map:
+                meta.source_path = source_path_map[meta.doc_id]
+                changed = True
             if changed:
                 filled += 1
 
         if filled:
             print(f"  [ChunkStore] 已加载 {len(self._meta_map)} 条 chunk 元信息"
-                  f"（回填 {filled} 条 doc_name/doc_title/source_file）")
+                  f"（回填 {filled} 条 doc_name/doc_title/source_file/source_path）")
         else:
             print(f"  [ChunkStore] 已加载 {len(self._meta_map)} 条 chunk 元信息")
 

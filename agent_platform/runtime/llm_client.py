@@ -14,6 +14,7 @@ LLM 客户端抽象层
 import json
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -72,6 +73,82 @@ class LLMResponse:
         return len(self.tool_calls) > 0
 
 
+class KeyPool:
+    """
+    API Key 池 — 轮询 + 故障转移
+
+    支持多个 API Key 的负载均衡:
+      - round-robin 轮询分配
+      - 失败次数过多的 Key 暂时禁用（冷却）
+      - 全部 Key 都失败时抛出异常
+    """
+
+    def __init__(self, keys: List[str]):
+        # 去重、去空
+        self._keys = [k.strip() for k in keys if k and k.strip()]
+        if not self._keys:
+            self._keys = ["mock"]
+        self._index = 0
+        self._lock = threading.Lock()
+        self._fail_counts: Dict[str, int] = {}
+        self._disabled_until: Dict[str, float] = {}
+        self._max_fails = 3          # 连续失败 N 次后禁用
+        self._cooldown_s = 30.0      # 冷却时间（秒）
+        self._rotate_on_fail = True  # 失败时轮换到下一个 Key
+
+    def _now(self) -> float:
+        import time
+        return time.monotonic()
+
+    def _is_available(self, key: str) -> bool:
+        """检查 Key 是否可用（未被冷却禁用）"""
+        until = self._disabled_until.get(key, 0)
+        if until and self._now() < until:
+            return False
+        if until and self._now() >= until:
+            # 冷却结束，重置失败计数
+            self._disabled_until.pop(key, None)
+            self._fail_counts.pop(key, None)
+        return True
+
+    def next_key(self) -> str:
+        """获取下一个可用 Key（round-robin）"""
+        with self._lock:
+            if len(self._keys) == 1:
+                return self._keys[0]
+            for _ in range(len(self._keys)):
+                key = self._keys[self._index % len(self._keys)]
+                self._index += 1
+                if self._is_available(key):
+                    return key
+            # 全部冷却 → 返回当前索引的 Key（降级可用但不保证成功）
+            return self._keys[self._index % len(self._keys)]
+
+    def record_success(self, key: str):
+        """记录成功调用，重置失败计数"""
+        with self._lock:
+            self._fail_counts.pop(key, None)
+
+    def record_failure(self, key: str):
+        """记录失败调用，超过阈值则暂时禁用"""
+        with self._lock:
+            count = self._fail_counts.get(key, 0) + 1
+            self._fail_counts[key] = count
+            if count >= self._max_fails:
+                self._disabled_until[key] = self._now() + self._cooldown_s
+                logger.warning(
+                    "[KeyPool] Key 连续失败 %d 次，冷却 %ds: %s...",
+                    count, self._cooldown_s, key[:8],
+                )
+
+    @property
+    def key_count(self) -> int:
+        return len(self._keys)
+
+    def __repr__(self) -> str:
+        return f"KeyPool(count={len(self._keys)}, disabled={len(self._disabled_until)})"
+
+
 class LLMClient:
     """
     LLM 客户端 — OpenAI 兼容 API 调用
@@ -98,17 +175,33 @@ class LLMClient:
         model: Optional[str] = None,
         small_model: Optional[str] = None,
         mock: Optional[bool] = None,
+        api_keys: Optional[List[str]] = None,
     ):
         """
         Args:
             api_base: API 基础 URL
-            api_key: API Key
+            api_key: API Key（单个，向后兼容）
             model: 主模型名称（回答生成）
             small_model: 小模型名称（意图识别、改写等）
             mock: 是否强制 Mock 模式，None 时自动判断
+            api_keys: 多 API Key 列表（优先级高于 api_key/LLM_API_KEY）
         """
         self._api_base = api_base or os.getenv("LLM_API_BASE", "https://api.deepseek.com/v1")
+        # 多 Key 配置来源优先级: api_keys 参数 > LLM_API_KEYS 环境变量 > api_key/LLM_API_KEY
+        env_keys = os.getenv("LLM_API_KEYS", "")
+        key_list = []
+        if api_keys:
+            key_list = list(api_keys)
+        elif env_keys:
+            key_list = [k.strip() for k in env_keys.split(",") if k.strip()]
+        else:
+            single_key = api_key or os.getenv("LLM_API_KEY", "")
+            key_list = [single_key] if single_key else []
+
         self._api_key = api_key or os.getenv("LLM_API_KEY", "")
+        self._key_pool = KeyPool(key_list)
+        # 当前使用的 Key（随轮询更新）
+        self._current_key = self._key_pool.next_key() if not self._is_all_mock() else ""
         self._model = model or os.getenv("LLM_MODEL", "deepseek-chat")
         self._small_model = small_model or os.getenv("LLM_SMALL_MODEL", "deepseek-chat")
 
@@ -116,12 +209,15 @@ class LLMClient:
         if mock is not None:
             self._mock = mock
         else:
-            self._mock = not self._api_key or self._api_key == "mock"
+            self._mock = not self._api_key and not env_keys
+        # 兼容: 单 Key 为 "mock" 时强制 Mock
+        if self._api_key == "mock":
+            self._mock = True
 
         # ── 初始化底层客户端 ──
         # 优先 openai SDK；不可用时回退 httpx 直连
         self._backend = "none"  # "sdk" | "httpx" | "none"(mock)
-        self._sdk_client = None
+        self._sdk_clients: Dict[str, Any] = {}
         self._httpx_client = None
 
         if not self._mock:
@@ -129,22 +225,35 @@ class LLMClient:
 
         if self._mock:
             logger.info("LLM 客户端运行在 Mock 模式（无真实 API 调用）")
+        else:
+            logger.info(
+                "LLM 客户端: backend=%s, keys=%d, model=%s",
+                self._backend, self._key_pool.key_count, self._model,
+            )
+
+    def _is_all_mock(self) -> bool:
+        """所有 Key 是否都是 mock（无真实调用）"""
+        return all(k == "mock" for k in self._key_pool._keys)
 
     def _init_backend(self) -> None:
-        """初始化底层调用后端"""
+        """初始化底层调用后端（支持多 Key）"""
         # 尝试 openai SDK
         try:
             from openai import OpenAI
 
-            self._sdk_client = OpenAI(
-                base_url=self._api_base,
-                api_key=self._api_key,
-                timeout=60.0,    # 60 秒超时（避免长时间卡死）
-                max_retries=2,   # 自动重试 2 次
-            )
-            self._backend = "sdk"
-            logger.debug("LLM 后端: openai SDK (timeout=60s, retries=2)")
-            return
+            for key in self._key_pool._keys:
+                if key == "mock":
+                    continue
+                self._sdk_clients[key] = OpenAI(
+                    base_url=self._api_base,
+                    api_key=key,
+                    timeout=35.0,    # 35 秒超时（避免LLM调用堆积，DeepSeek V4 Flash 正常3-8s）
+                    max_retries=0,   # 关闭 SDK 自动重试（由 KeyPool 轮询接管，避免 3x 等待）
+                )
+            if self._sdk_clients:
+                self._backend = "sdk"
+                logger.debug("LLM 后端: openai SDK (timeout=60s, retries=2, keys=%d)", len(self._sdk_clients))
+                return
         except ImportError:
             logger.debug("openai 库未安装，尝试 httpx 后端")
 
@@ -154,12 +263,12 @@ class LLMClient:
 
             # 禁用代理，避免本地代理导致连接失败
             self._httpx_client = httpx.Client(
-                timeout=60.0,
+                timeout=35.0,
                 proxy=None,  # 显式禁用代理
                 verify=True,
             )
             self._backend = "httpx"
-            logger.debug("LLM 后端: httpx 直连")
+            logger.debug("LLM 后端: httpx 直连（多 Key 轮询）")
         except ImportError:
             logger.warning("openai 和 httpx 均不可用，回退到 Mock 模式")
             self._mock = True
@@ -236,24 +345,89 @@ class LLMClient:
                 api_kwargs["tool_choice"] = tool_choice
         api_kwargs.update(kwargs)
 
-        # 按后端分发
-        try:
-            if self._backend == "sdk":
-                return self._chat_via_sdk(api_kwargs)
-            elif self._backend == "httpx":
-                return self._chat_via_httpx(api_kwargs)
-            else:
-                # 不应到达此处
-                return self._mock_chat(
-                    messages, use_model, temperature, max_tokens, tools=tools
+        # 按后端分发（多 Key 轮询 + 故障转移）
+        last_error: Optional[Exception] = None
+        attempts = 0
+        while attempts < max(1, self._key_pool.key_count):
+            attempts += 1
+            key = self._key_pool.next_key()
+            try:
+                if self._backend == "sdk":
+                    result = self._chat_via_sdk(api_kwargs, key)
+                elif self._backend == "httpx":
+                    result = self._chat_via_httpx(api_kwargs, key)
+                else:
+                    # 不应到达此处
+                    return self._mock_chat(
+                        messages, use_model, temperature, max_tokens, tools=tools
+                    )
+                self._key_pool.record_success(key)
+                return result
+            except Exception as e:
+                last_error = e
+                self._key_pool.record_failure(key)
+                # 是否 429 限流错误
+                is_rate_limit = "429" in str(e) or "rate" in str(e).lower()
+                if attempts >= self._key_pool.key_count or not is_rate_limit:
+                    break  # 已尝试所有 Key，或非限流错误
+                logger.warning(
+                    "[LLMClient] Key 调用失败，轮换重试: %s (%d/%d)",
+                    key[:8], attempts, self._key_pool.key_count,
                 )
-        except Exception as e:
-            logger.error(f"LLM 调用失败: {e}", exc_info=True)
-            raise
 
-    def _chat_via_sdk(self, api_kwargs: Dict[str, Any]) -> LLMResponse:
-        """通过 openai SDK 调用"""
-        response = self._sdk_client.chat.completions.create(**api_kwargs)
+        logger.error(f"LLM 调用失败（所有 Key）: {last_error}", exc_info=True)
+        raise last_error
+
+    def chat_stream(
+        self,
+        messages: List[LLMMessage],
+        use_model: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 2048,
+        **kwargs,
+    ):
+        """
+        流式调用 LLM，逐 token yield。
+        失败时抛异常（由调用方捕获回退非流式）。
+        不支持 KeyPool 故障转移（流式已开始输出无法切换）。
+        """
+        model = use_model or self._model
+        key = self._key_pool.next_key()
+        sdk = self._sdk_clients.get(key)
+        if sdk is None:
+            raise ValueError(f"SDK client 未初始化: {key[:8]}...")
+
+        api_kwargs = {
+            "model": model,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        api_kwargs.update(kwargs)
+
+        logger.debug(
+            "[LLMClient] chat_stream → model=%s, key=%s..., msgs=%d",
+            model, key[:8], len(messages),
+        )
+
+        response = sdk.chat.completions.create(**api_kwargs)
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta:
+                delta = chunk.choices[0].delta
+                # DeepSeek reasoning_content (思维链字段)
+                reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+                if reasoning:
+                    yield ("thinking", reasoning)
+                if delta.content:
+                    yield ("token", delta.content)
+
+    def _chat_via_sdk(self, api_kwargs: Dict[str, Any], key: str) -> LLMResponse:
+        """通过 openai SDK 调用（按 Key 选择客户端）"""
+        sdk = self._sdk_clients.get(key)
+        if sdk is None:
+            raise ValueError(f"SDK client 未初始化: {key[:8]}...")
+        response = sdk.chat.completions.create(**api_kwargs)
         choice = response.choices[0]
         message = choice.message
 
@@ -285,12 +459,12 @@ class LLMClient:
             finish_reason=choice.finish_reason or "",
         )
 
-    def _chat_via_httpx(self, api_kwargs: Dict[str, Any]) -> LLMResponse:
-        """通过 httpx 直连 OpenAI 兼容 API"""
+    def _chat_via_httpx(self, api_kwargs: Dict[str, Any], key: str) -> LLMResponse:
+        """通过 httpx 直连 OpenAI 兼容 API（按 Key 轮换）"""
         url = f"{self._api_base.rstrip('/')}/chat/completions"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": f"Bearer {key}",
         }
 
         resp = self._httpx_client.post(url, json=api_kwargs, headers=headers)

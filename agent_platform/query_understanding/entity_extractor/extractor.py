@@ -46,6 +46,20 @@ class ExtractedEntity:
 # 文档名: 《商业银行资本管理办法》
 DOC_NAME_PATTERN = re.compile(r"《([^》]+)》")
 
+# 文档名后缀清理：用户可能在书名号内附带格式标识，需移除后再作为 doc_name 过滤值
+# 例如 《银行函证工作操作指引（PDF）》 → 银行函证工作操作指引
+_DOC_NAME_SUFFIX_PATTERN = re.compile(
+    r"[（(]\s*(?:PDF|Excel|Word|Docx?|Xlsx?|Pptx?|文档|表格)\s*[）)]"
+    r"|\.pdf$|\.docx?$|\.xlsx?$|\.pptx?$",
+    re.IGNORECASE,
+)
+
+
+def _clean_doc_name(raw: str) -> str:
+    """清理文档名：移除格式后缀（PDF/Excel/Word 等）"""
+    cleaned = _DOC_NAME_SUFFIX_PATTERN.sub("", raw).strip()
+    return cleaned if cleaned else raw
+
 # 条款号: 第四十三条 / 第43条
 CLAUSE_NUMBER_PATTERN = re.compile(
     r"第([一二三四五六七八九十百千零\d]+)条"
@@ -139,11 +153,12 @@ class EntityExtractor:
         entities: List[ExtractedEntity] = []
         query_stripped = query.strip()
 
-        # 文档名
+        # 文档名（清理格式后缀：如《银行函证工作操作指引（PDF）》→ 银行函证工作操作指引）
         for match in DOC_NAME_PATTERN.finditer(query_stripped):
+            cleaned = _clean_doc_name(match.group(1))
             entities.append(ExtractedEntity(
                 entity_type="doc_name",
-                value=match.group(1),
+                value=cleaned,
                 raw_text=match.group(0),
                 confidence=0.95,
             ))

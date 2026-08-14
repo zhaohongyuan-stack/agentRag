@@ -299,10 +299,12 @@ def calculator_handler(input_data: Dict[str, Any]) -> Any:
 
 CALCULATOR_MANIFEST = ToolManifest(
     name="calculator",
-    version="1.1.0",
+    version="1.2.0",
     description=(
         "数值计算器，支持全部基本运算、百分比、求和、均值、"
-        "合规比较、表达式求值、变化率与比率"
+        "合规比较、表达式求值、变化率与比率。"
+        "减法 subtract: 结果 = a - b，a 为被减数，b 为减数。"
+        "例如计算'从A到B的变化'应传入 a=B值(终点), b=A值(起点)"
     ),
     input_schema={
         "type": "object",
@@ -329,11 +331,11 @@ CALCULATOR_MANIFEST = ToolManifest(
             },
             "a": {
                 "type": "number",
-                "description": "运算数 a（add/subtract/multiply/divide/ratio）",
+                "description": "被减数/第一个运算数。subtract 时结果 = a - b；计算'从X到Y的变化'应传 a=Y值(终点), b=X值(起点)",
             },
             "b": {
                 "type": "number",
-                "description": "运算数 b（add/subtract/multiply/divide/ratio）",
+                "description": "减数/第二个运算数。subtract 时结果 = a - b；被减去的是 b",
             },
             "numbers": {
                 "type": "array",

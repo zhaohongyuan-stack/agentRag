@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic RAG — Agent 思考链模板</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   Agentic RAG 前端模板 — Agent 思考链可视化
+   可复用组件，所有样式类以 ar- 前缀，避免命名冲突
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 主题变量（可覆盖）── */
+:root {
+  --ar-bg: #1a1a2e;
+  --ar-bg-panel: #16213e;
+  --ar-bg-card: #1e2a4a;
+  --ar-bg-hover: #233156;
+  --ar-border: #333a55;
+  --ar-text: #e0e0e0;
+  --ar-text-muted: #9a9ab0;
+  --ar-text-dim: #6a6a80;
+  --ar-green: #4ade80;
+  --ar-green-dim: #1f3d2e;
+  --ar-blue: #61afef;
+  --ar-blue-dim: #1d2f4a;
+  --ar-yellow: #e5c07b;
+  --ar-yellow-dim: #3d3220;
+  --ar-red: #f87171;
+  --ar-red-dim: #3d2020;
+  --ar-purple: #c678dd;
+  --ar-purple-dim: #33203d;
+  --ar-cyan: #56b6c2;
+  --ar-cyan-dim: #163238;
+  --ar-radius: 8px;
+  --ar-radius-sm: 5px;
+  --ar-font: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  --ar-font-mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--ar-bg);
+  color: var(--ar-text);
+  font-family: var(--ar-font);
+  font-size: 14px;
+  line-height: 1.6;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ═══════ 主布局 ═══════ */
+.ar-root { display: flex; height: 100vh; }
+.ar-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--ar-border);
+  min-width: 0;
+}
+.ar-panel {
+  width: 460px;
+  background: var(--ar-bg-panel);
+  border-left: 1px solid var(--ar-border);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ar-panel.collapsed { width: 44px; }
+
+/* ═══════ 顶部栏 ═══════ */
+.ar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ar-border);
+  background: var(--ar-bg-card);
+}
+.ar-header h1 { font-size: 15px; font-weight: 600; }
+.ar-header .ar-sub { font-size: 11px; color: var(--ar-text-muted); }
+
+.ar-panel-toggle {
+  background: none; border: none; color: var(--ar-text-muted);
+  cursor: pointer; font-size: 18px; padding: 4px 8px;
+}
+.ar-panel-toggle:hover { color: var(--ar-text); }
+
+/* ═══════ 输入区 ═══════ */
+.ar-input-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--ar-border);
+  background: var(--ar-bg-card);
+}
+.ar-input-row { display: flex; gap: 8px; }
+.ar-input {
+  flex: 1;
+  background: var(--ar-bg-panel);
+  border: 1px solid var(--ar-border);
+  border-radius: var(--ar-radius-sm);
+  padding: 10px 14px;
+  color: var(--ar-text);
+  font-size: 14px;
+  font-family: var(--ar-font);
+  resize: vertical;
+  min-height: 44px;
+}
+.ar-input:focus { outline: none; border-color: var(--ar-blue); }
+.ar-send-btn {
+  padding: 0 20px;
+  background: var(--ar-green);
+  color: #0d1f0d;
+  border: none;
+  border-radius: var(--ar-radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ar-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ═══════ 消息区 ═══════ */
+.ar-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ar-msg { max-width: 85%; padding: 10px 14px; border-radius: var(--ar-radius); white-space: pre-wrap; }
+.ar-msg-user { align-self: flex-end; background: var(--ar-blue-dim); border: 1px solid var(--ar-border); }
+.ar-msg-agent { align-self: flex-start; background: var(--ar-bg-card); border: 1px solid var(--ar-border); }
+.ar-msg-streaming::after {
+  content: '▌';
+  animation: ar-blink 1s step-end infinite;
+  color: var(--ar-blue);
+}
+@keyframes ar-blink { 50% { opacity: 0; } }
+
+/* ═══════ Agent 思考链面板 ═══════ */
+.ar-chain {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ar-chain-empty {
+  color: var(--ar-text-dim);
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 13px;
+}
+.ar-chain-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 10px;
+  font-size: 12px;
+  color: var(--ar-text-muted);
+  border-bottom: 1px solid var(--ar-border);
+}
+
+/* ── Agent 卡片 ── */
+.ar-agent {
+  background: var(--ar-bg-card);
+  border: 1px solid var(--ar-border);
+  border-radius: var(--ar-radius);
+  overflow: hidden;
+}
+.ar-agent-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.ar-agent-head:hover { background: var(--ar-bg-hover); }
+.ar-agent-icon {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.ar-agent-title { flex: 1; min-width: 0; }
+.ar-agent-name { font-weight: 600; font-size: 13px; }
+.ar-agent-status { font-size: 11px; color: var(--ar-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-agent-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ar-text-dim); flex-shrink: 0; }
+.ar-agent-time { font-family: var(--ar-font-mono); }
+.ar-agent-arrow { transition: transform 0.2s; color: var(--ar-text-dim); }
+.ar-agent.expanded .ar-agent-arrow { transform: rotate(90deg); }
+
+/* 状态徽章 */
+.ar-badge {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ar-badge-running { background: var(--ar-blue-dim); color: var(--ar-blue); }
+.ar-badge-done { background: var(--ar-green-dim); color: var(--ar-green); }
+.ar-badge-fail { background: var(--ar-red-dim); color: var(--ar-red); }
+.ar-badge-warn { background: var(--ar-yellow-dim); color: var(--ar-yellow); }
+.ar-spinner {
+  width: 12px; height: 12px;
+  border: 2px solid var(--ar-blue-dim);
+  border-top-color: var(--ar-blue);
+  border-radius: 50%;
+  animation: ar-spin 0.8s linear infinite;
+}
+@keyframes ar-spin { to { transform: rotate(360deg); } }
+
+/* Agent 决策详情 */
+.ar-agent-body { display: none; border-top: 1px solid var(--ar-border); padding: 10px 12px; }
+.ar-agent.expanded .ar-agent-body { display: block; }
+.ar-agent-body pre {
+  font-family: var(--ar-font-mono);
+  font-size: 12px;
+  background: var(--ar-bg-panel);
+  padding: 8px 10px;
+  border-radius: var(--ar-radius-sm);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.ar-kv { display: grid; grid-template-columns: 72px 1fr; gap: 4px 8px; font-size: 12px; }
+.ar-kv dt { color: var(--ar-text-muted); }
+.ar-kv dd { color: var(--ar-text); word-break: break-all; }
+
+/* ── 工具调用 ── */
+.ar-tool {
+  margin: 6px 0 0 38px;
+  border-left: 2px solid var(--ar-purple);
+  padding: 6px 10px;
+  background: var(--ar-bg-panel);
+  border-radius: 0 var(--ar-radius-sm) var(--ar-radius-sm) 0;
+  font-size: 12px;
+}
+.ar-tool-head { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ar-purple); font-family: var(--ar-font-mono); }
+.ar-tool-body { display: none; margin-top: 6px; }
+.ar-tool.expanded .ar-tool-body { display: block; }
+.ar-tool-body pre {
+  font-family: var(--ar-font-mono);
+  font-size: 11px;
+  color: var(--ar-text-muted);
+  background: var(--ar-bg);
+  padding: 6px 8px;
+  border-radius: var(--ar-radius-sm);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ── Loop 轮次 ── */
+.ar-loop {
+  border: 1px dashed var(--ar-cyan);
+  border-radius: var(--ar-radius);
+  padding: 8px 10px;
+  background: var(--ar-cyan-dim);
+  margin: 2px 0;
+}
+.ar-loop-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--ar-cyan);
+  cursor: pointer; user-select: none;
+}
+.ar-loop-body { display: none; margin-top: 8px; }
+.ar-loop.expanded .ar-loop-body { display: block; }
+.ar-loop-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px dashed var(--ar-border);
+}
+.ar-loop-row:last-child { border-bottom: none; }
+.ar-loop-query { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-loop-hits { color: var(--ar-green); font-family: var(--ar-font-mono); }
+.ar-loop-score { color: var(--ar-yellow); font-family: var(--ar-font-mono); }
+
+/* ── 证据摘要 ── */
+.ar-evidence {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ar-text-muted);
+  background: var(--ar-bg);
+  border-radius: var(--ar-radius-sm);
+  padding: 6px 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.ar-evidence-item { padding: 2px 0; border-bottom: 1px solid var(--ar-border); }
+.ar-evidence-item:last-child { border-bottom: none; }
+.ar-evidence-src { color: var(--ar-blue); font-family: var(--ar-font-mono); font-size: 10px; }
+.ar-evidence-score { color: var(--ar-yellow); font-family: var(--ar-font-mono); float: right; }
+
+/* ── Verifier 声明验证 ── */
+.ar-claims { margin-top: 6px; }
+.ar-claim {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--ar-radius-sm);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.ar-claim-verified { background: var(--ar-green-dim); }
+.ar-claim-unverified { background: var(--ar-red-dim); }
+.ar-claim-status { flex-shrink: 0; font-size: 13px; }
+.ar-claim-text { flex: 1; word-break: break-all; }
+.ar-claim-reason { display: block; color: var(--ar-text-muted); font-size: 11px; margin-top: 2px; }
+
+/* ── 底部状态栏 ── */
+.ar-footer {
+  padding: 6px 12px;
+  border-top: 1px solid var(--ar-border);
+  font-size: 11px;
+  color: var(--ar-text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ar-bg-card);
+}
+.ar-status { display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════ 主布局 ═══════ -->
+<div class="ar-root">
+  <!-- 左侧: 对话区 -->
+  <div class="ar-chat">
+    <div class="ar-header">
+      <div>
+        <h1>ACE-RAG 问答</h1>
+        <div class="ar-sub">Agentic RAG · 思考链可视化</div>
+      </div>
+    </div>
+    <div class="ar-messages" id="arMessages">
+      <div class="ar-msg ar-msg-agent">你好，我是监管知识问答助手。请输入你的问题，我会通过多 Agent 协作检索监管文档并给出带引用的回答。</div>
+    </div>
+    <div class="ar-input-area">
+      <div class="ar-input-row">
+        <textarea class="ar-input" id="arInput" rows="1" placeholder="请输入监管知识问题，如：2024年银行业金融机构总负债是多少？"></textarea>
+        <button class="ar-send-btn" id="arSendBtn">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧: Agent 思考链面板 -->
+  <div class="ar-panel" id="arPanel">
+    <div class="ar-header">
+      <div>
+        <h1>Agent 思考链</h1>
+        <div class="ar-sub">实时展示各 Agent 的决策过程</div>
+      </div>
+      <button class="ar-panel-toggle" id="arPanelToggle" title="折叠/展开">»</button>
+    </div>
+    <div class="ar-chain" id="arChain">
+      <div class="ar-chain-empty">发送问题后，此处将实时展示<br>Planner → Retriever → Evaluator → Generator → Verifier<br>的完整思考过程</div>
+    </div>
+    <div class="ar-footer">
+      <div class="ar-status" id="arStatus">
+        <span class="ar-badge ar-badge-done">空闲</span>
+      </div>
+      <span id="arElapsed">0.0s</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   Agentic RAG 前端模板 — JavaScript 逻辑
+   核心: SSE 连接 + 事件渲染 + 可复用的 DOM 构建工具
+   ═══════════════════════════════════════════════════════════ */
+
+(function () {
+  'use strict';
+
+  /* ── 常量配置 ── */
+  var CONFIG = {
+    // SSE 流式查询端点（nginx 代理路径，可改为 /api/v1/query/stream 直连后端）
+    streamUrl: '/api/agent/query/stream',
+    // Agent 元信息（图标/颜色/描述）
+    agents: {
+      Planner:   { icon: '🤖', color: '#c678dd', desc: '规划检索策略与越界检测' },
+      Retriever: { icon: '🔍', color: '#61afef', desc: '检索监管文档与证据组装' },
+      Evaluator: { icon: '📊', color: '#e5c07b', desc: '评估证据充分性' },
+      Generator: { icon: '✍️', color: '#4ade80', desc: '基于证据生成回答' },
+      Verifier:  { icon: '✅', color: '#56b6c2', desc: '声明级验证回答' },
+      System:    { icon: '⚙️', color: '#f87171', desc: '系统' }
+    }
+  };
+
+  /* ── DOM 引用 ── */
+  var messagesEl = document.getElementById('arMessages');
+  var chainEl = document.getElementById('arChain');
+  var inputEl = document.getElementById('arInput');
+  var sendBtn = document.getElementById('arSendBtn');
+  var statusEl = document.getElementById('arStatus');
+  var elapsedEl = document.getElementById('arElapsed');
+  var panelEl = document.getElementById('arPanel');
+  var panelToggle = document.getElementById('arPanelToggle');
+
+  /* ── 状态 ── */
+  var state = {
+    streaming: false,
+    eventSource: null,
+    agentCards: {},      // agent+round -> card element
+    loopRounds: {},      // round -> loop element
+    startTime: null,
+    timer: null,
+    activeAnswerEl: null
+  };
+
+  /* ── 工具函数 ── */
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+
+  function truncate(str, len) {
+    str = str || '';
+    return str.length > len ? str.slice(0, len) + '…' : str;
+  }
+
+  function fmtMs(ms) {
+    if (!ms || ms <= 0) return '';
+    return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms';
+  }
+
+  function escHtml(str) {
+    var d = document.createElement('div');
+    d.textContent = str == null ? '' : String(str);
+    return d.innerHTML;
+  }
+
+  /* ── 状态栏更新 ── */
+  function setStatus(text, badgeCls) {
+    statusEl.innerHTML = '';
+    if (badgeCls) {
+      var b = el('span', 'ar-badge ' + badgeCls, text);
+      statusEl.appendChild(b);
+    } else {
+      statusEl.textContent = text;
+    }
+  }
+
+  function startElapsed() {
+    state.startTime = Date.now();
+    state.timer = setInterval(function () {
+      var s = ((Date.now() - state.startTime) / 1000).toFixed(1);
+      elapsedEl.textContent = s + 's';
+    }, 100);
+  }
+
+  function stopElapsed() {
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+  }
+
+  /* ── Agent 卡片管理 ── */
+  function getAgentCard(agentName, round, opts) {
+    var key = agentName + '_' + (round || 0);
+    if (state.agentCards[key]) return state.agentCards[key];
+
+    var meta = CONFIG.agents[agentName] || CONFIG.agents.System;
+    var card = el('div', 'ar-agent');
+    var head = el('div', 'ar-agent-head');
+
+    var icon = el('div', 'ar-agent-icon', meta.icon);
+    icon.style.background = (meta.color || '#888') + '22';
+    icon.style.border = '1px solid ' + (meta.color || '#888') + '55';
+
+    var title = el('div', 'ar-agent-title');
+    var name = el('div', 'ar-agent-name', agentName + (round > 0 ? ' · R' + (round + 1) : ''));
+    var status = el('div', 'ar-agent-status', opts && opts.statusText || meta.desc);
+    title.appendChild(name);
+    title.appendChild(status);
+
+    var metaEl = el('div', 'ar-agent-meta');
+    var badge = el('span', 'ar-badge ar-badge-running', '执行中');
+    var time = el('span', 'ar-agent-time', '');
+    var arrow = el('span', 'ar-agent-arrow', '▶');
+    metaEl.appendChild(badge);
+    metaEl.appendChild(time);
+    metaEl.appendChild(arrow);
+
+    head.appendChild(icon);
+    head.appendChild(title);
+    head.appendChild(metaEl);
+    head.addEventListener('click', function () { card.classList.toggle('expanded'); });
+
+    var body = el('div', 'ar-agent-body');
+    card.appendChild(head);
+    card.appendChild(body);
+
+    // 标记
+    card._agentName = agentName;
+    card._badge = badge;
+    card._time = time;
+    card._statusText = status;
+    card._body = body;
+
+    // 插入到 chain 顶部（按时间顺序，新 Agent 追加到末尾）
+    chainEl.appendChild(card);
+    state.agentCards[key] = card;
+    card.scrollIntoView({ block: 'nearest' });
+    return card;
+  }
+
+  function setCardDone(card, decision, latencyMs, extraCls) {
+    card._badge.className = 'ar-badge ' + (extraCls || 'ar-badge-done');
+    card._badge.textContent = decision || '完成';
+    card._time.textContent = fmtMs(latencyMs);
+    card._statusText.textContent = decision || '完成';
+  }
+
+  /* ── 工具调用渲染 ── */
+  function renderTool(card, data) {
+    var toolName = data.tool || 'tool';
+    var args = data.args || {};
+    var tool = el('div', 'ar-tool');
+    var head = el('div', 'ar-tool-head', '🔧 ' + toolName);
+    head.appendChild(el('span', '', '(' + truncate(JSON.stringify(args), 80) + ')'));
+    var body = el('div', 'ar-tool-body');
+    var pre = el('pre', '');
+    pre.textContent = '参数: ' + JSON.stringify(args, null, 2);
+    body.appendChild(pre);
+    head.addEventListener('click', function () { tool.classList.toggle('expanded'); });
+    tool.appendChild(head);
+    tool.appendChild(body);
+    tool._resultPre = pre;
+    card._body.appendChild(tool);
+    return tool;
+  }
+
+  function renderToolResult(toolEl, data) {
+    var result = data.result || {};
+    var pre = toolEl._resultPre;
+    pre.textContent = '参数: ' + JSON.stringify(data.args || {}, null, 2) + '\n\n结果: ' + JSON.stringify(result, null, 2);
+    toolEl.classList.add('expanded');
+  }
+
+  /* ── Loop 轮次渲染 ── */
+  function renderLoopRound(data) {
+    var round = data.round || 0;
+    var existing = state.loopRounds[round];
+    if (existing) {
+      // 更新已有轮次
+      existing._hits.textContent = 'hits: ' + (data.hits || 0);
+      existing._score.textContent = 'score: ' + (data.score != null ? data.score.toFixed(3) : '—');
+      return;
+    }
+
+    var loop = el('div', 'ar-loop');
+    var head = el('div', 'ar-loop-head');
+    head.appendChild(el('span', 'ar-spinner'));
+    head.appendChild(el('span', '', '检索-评估 Loop 第 ' + (round + 1) + ' 轮'));
+    head.appendChild(el('span', 'ar-agent-arrow', '▶'));
+
+    var body = el('div', 'ar-loop-body');
+    var row = el('div', 'ar-loop-row');
+    var query = el('span', 'ar-loop-query', truncate(data.query || '', 60));
+    var hits = el('span', 'ar-loop-hits', 'hits: ' + (data.hits || 0));
+    var score = el('span', 'ar-loop-score', 'score: ' + (data.score != null ? data.score.toFixed(3) : '—'));
+    row.appendChild(query);
+    row.appendChild(hits);
+    row.appendChild(score);
+    body.appendChild(row);
+    loop.appendChild(head);
+    loop.appendChild(body);
+
+    head.addEventListener('click', function () { loop.classList.toggle('expanded'); });
+    loop._hits = hits;
+    loop._score = score;
+
+    chainEl.appendChild(loop);
+    state.loopRounds[round] = loop;
+    loop.scrollIntoView({ block: 'nearest' });
+  }
+
+  /* ── 证据摘要渲染 ── */
+  function renderEvidence(card, data) {
+    var hits = data.hits || [];
+    if (!hits.length) return;
+    var ev = el('div', 'ar-evidence');
+    ev.appendChild(el('div', '', '▸ 命中 ' + hits.length + ' 条证据'));
+    hits.slice(0, 5).forEach(function (h) {
+      var item = el('div', 'ar-evidence-item');
+      var src = h.doc_id || h.source || h.document_id || 'unknown';
+      var score = h.score != null ? h.score.toFixed(3) : '';
+      item.appendChild(el('span', 'ar-evidence-src', '[' + truncate(src, 30) + ']'));
+      item.appendChild(el('span', 'ar-evidence-score', score));
+      item.appendChild(el('div', '', truncate(h.text || h.content || '', 120)));
+      ev.appendChild(item);
+    });
+    card._body.appendChild(ev);
+  }
+
+  /* ── Verifier 声明验证渲染 ── */
+  function renderClaims(card, claims) {
+    if (!claims || !claims.length) return;
+    var wrap = el('div', 'ar-claims');
+    wrap.appendChild(el('div', '', '▸ 声明级验证结果'));
+    claims.forEach(function (c) {
+      var verified = c.status === 'verified';
+      var claim = el('div', 'ar-claim ' + (verified ? 'ar-claim-verified' : 'ar-claim-unverified'));
+      claim.appendChild(el('span', 'ar-claim-status', verified ? '✅' : '❌'));
+      var text = el('span', 'ar-claim-text', truncate(c.text || '', 200));
+      if (c.evidence_id) {
+        text.appendChild(el('span', 'ar-claim-reason', '证据: ' + c.evidence_id));
+      }
+      if (c.reason) {
+        text.appendChild(el('span', 'ar-claim-reason', '原因: ' + c.reason));
+      }
+      claim.appendChild(text);
+      wrap.appendChild(claim);
+    });
+    card._body.appendChild(wrap);
+  }
+
+  /* ── 状态机: 事件分发 ── */
+  function handleEvent(evt) {
+    var type = evt.type;
+    var agent = evt.agent;
+    var round = evt.round || 0;
+    var data = evt.data || {};
+    var card;
+
+    switch (type) {
+      case 'agent:start':
+        card = getAgentCard(agent, round, { statusText: '正在执行…' });
+        card._statusText.textContent = '正在执行…';
+        card._badge.className = 'ar-badge ar-badge-running';
+        card._badge.textContent = '执行中';
+        if (agent === 'Planner' && data.intent) {
+          renderKV(card._body, [
+            ['查询', data.query || ''],
+            ['意图', data.intent],
+            ['复杂度', data.complexity]
+          ]);
+        }
+        break;
+
+      case 'agent:thinking':
+        card = getAgentCard(agent, round);
+        renderThinking(card, data.content);
+        break;
+
+      case 'agent:result':
+        card = getAgentCard(agent, round);
+        if (agent === 'Planner') {
+          var decision = evt.decision || 'proceed';
+          setCardDone(card, decision === 'out_of_domain' ? '领域越界' : '规划完成', evt.latency_ms, decision === 'out_of_domain' ? 'ar-badge-fail' : 'ar-badge-done');
+          renderKV(card._body, [
+            ['决策', decision],
+            ['越界', data.is_out_of_domain ? '是' : '否'],
+            ['意图', data.intent || ''],
+            ['复杂度', data.complexity || ''],
+            ['策略', (data.strategies || []).join(', ')],
+            ['领域置信度', data.domain_confidence != null ? data.domain_confidence.toFixed(2) : '—']
+          ]);
+          if (data.reasoning) renderKV(card._body, [['推理', truncate(data.reasoning, 300)]]);
+        } else if (agent === 'Retriever') {
+          setCardDone(card, '检索完成 · hits=' + (data.hit_count || 0), evt.latency_ms);
+        } else if (agent === 'Evaluator') {
+          var suff = data.is_sufficient;
+          setCardDone(card, suff ? '证据充分' : '证据不足', evt.latency_ms, suff ? 'ar-badge-done' : 'ar-badge-warn');
+          var dims = data.dimensions || {};
+          var dimStr = Object.keys(dims).map(function (k) { return k + '=' + dims[k]; }).join(', ');
+          renderKV(card._body, [
+            ['充分性', (data.sufficiency_score != null ? data.sufficiency_score.toFixed(3) : '—') + (suff ? ' ✅' : ' ❌')],
+            ['维度', dimStr || '—'],
+            ['缺失声明', (data.missing_claims || []).join('; ') || '—']
+          ]);
+          var sug = data.retrieval_suggestion || {};
+          if (sug.suggested_query) {
+            renderKV(card._body, [['检索建议', sug.suggested_query + ' (' + (sug.suggested_strategy || '') + ')']]);
+          }
+        } else if (agent === 'Generator') {
+          setCardDone(card, '回答生成完成', evt.latency_ms);
+        } else if (agent === 'Verifier') {
+          var vOK = data.verified;
+          var needsRetry = data.needs_retry;
+          var decisionText = needsRetry ? '需补充检索' : (vOK ? '验证通过' : '部分验证');
+          setCardDone(card, decisionText, evt.latency_ms, needsRetry ? 'ar-badge-warn' : (vOK ? 'ar-badge-done' : 'ar-badge-warn'));
+          renderKV(card._body, [
+            ['验证通过', vOK ? '是' : '否'],
+            ['已验证', data.verified_count + ' 条'],
+            ['未验证', data.unverified_count + ' 条']
+          ]);
+          renderClaims(card, data.claims);
+          if (data.retry_query) renderKV(card._body, [['补充检索', data.retry_query]]);
+        }
+        break;
+
+      case 'tool:call':
+        card = getAgentCard(agent, round);
+        var toolEl = renderTool(card, data);
+        card._lastTool = toolEl;
+        break;
+
+      case 'tool:result':
+        card = getAgentCard(agent, round);
+        if (card._lastTool) {
+          renderToolResult(card._lastTool, { args: {}, result: data.result || {} });
+          card._lastTool = null;
+        }
+        break;
+
+      case 'loop:round':
+        renderLoopRound(data);
+        // 更新 Retriever 卡片状态
+        card = getAgentCard('Retriever', round, { statusText: '第 ' + (round + 1) + ' 轮检索' });
+        card._statusText.textContent = '第 ' + (round + 1) + ' 轮 · hits=' + (data.hits || 0);
+        break;
+
+      case 'answer:token':
+        ensureAnswerEl().textContent += (data.token || '');
+        break;
+
+      case 'error':
+        setStatus('错误', 'ar-badge-fail');
+        var errCard = getAgentCard('System', 0, { statusText: '执行异常' });
+        setCardDone(errCard, '异常', 0, 'ar-badge-fail');
+        renderKV(errCard._body, [['错误', data.message || '未知错误']]);
+        break;
+
+      case 'done':
+        stopElapsed();
+        setStatus('完成', 'ar-badge-done');
+        elapsedEl.textContent = '总耗时 ' + fmtMs(Date.now() - (state.startTime || Date.now()));
+        // 完成回答渲染（若 SSE 未流式 token，用 done 数据补全）
+        var resp = data;
+        if (resp && resp.answer && !state.answerStreamed) {
+          ensureAnswerEl().textContent = resp.answer;
+        }
+        // 移除流式光标
+        if (state.activeAnswerEl) {
+          state.activeAnswerEl.classList.remove('ar-msg-streaming');
+        }
+        // 关闭连接，重置状态
+        state.streaming = false;
+        sendBtn.disabled = false;
+        if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+        break;
+    }
+  }
+
+  function renderKV(container, pairs) {
+    var dl = el('dl', 'ar-kv');
+    pairs.forEach(function (p) {
+      if (!p[1]) return;
+      dl.appendChild(el('dt', '', p[0] + ':'));
+      dl.appendChild(el('dd', '', p[1]));
+    });
+    if (dl.children.length) container.appendChild(dl);
+  }
+
+  function renderThinking(card, content) {
+    var p = el('pre', '');
+    p.textContent = content;
+    card._body.appendChild(p);
+  }
+
+  function ensureAnswerEl() {
+    if (state.activeAnswerEl) return state.activeAnswerEl;
+    var msg = el('div', 'ar-msg ar-msg-agent ar-msg-streaming');
+    messagesEl.appendChild(msg);
+    state.activeAnswerEl = msg;
+    state.answerStreamed = true;
+    msg.scrollIntoView({ block: 'nearest' });
+    return msg;
+  }
+
+  /* ── SSE 连接 ── */
+  function startStream(query) {
+    if (state.streaming) return;
+    state.streaming = true;
+    sendBtn.disabled = true;
+
+    // 清空上一轮
+    chainEl.innerHTML = '';
+    messagesEl.querySelectorAll('.ar-msg-streaming').forEach(function (n) { n.remove(); });
+    state.agentCards = {};
+    state.loopRounds = {};
+    state.activeAnswerEl = null;
+    state.answerStreamed = false;
+
+    // 显示用户消息
+    messagesEl.appendChild(el('div', 'ar-msg ar-msg-user', query));
+
+    setStatus('执行中…', 'ar-badge-running');
+    startElapsed();
+
+    var url = CONFIG.streamUrl + '?query=' + encodeURIComponent(query);
+    state.eventSource = new EventSource(url);
+
+    state.eventSource.onmessage = function (e) {
+      try {
+        var evt = JSON.parse(e.data);
+        handleEvent(evt);
+      } catch (err) {
+        console.error('SSE 解析失败:', err);
+      }
+    };
+
+    state.eventSource.onerror = function () {
+      // 完成或异常时关闭
+      stopElapsed();
+      state.streaming = false;
+      sendBtn.disabled = false;
+      if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+      if (state.activeAnswerEl) {
+        state.activeAnswerEl.classList.remove('ar-msg-streaming');
+      }
+      setStatus('连接已关闭', 'ar-badge-warn');
+    };
+  }
+
+  function sendQuery() {
+    var q = inputEl.value.trim();
+    if (!q || state.streaming) return;
+    startStream(q);
+  }
+
+  /* ── 事件绑定 ── */
+  sendBtn.addEventListener('click', sendQuery);
+  inputEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendQuery();
+    }
+  });
+
+  panelToggle.addEventListener('click', function () {
+    panelEl.classList.toggle('collapsed');
+    panelToggle.textContent = panelEl.classList.contains('collapsed') ? '«' : '»';
+  });
+
+  /* ── 启动 ── */
+  console.log('Agentic RAG 前端模板已加载');
+})();
+</script>
+</body>
+</html>

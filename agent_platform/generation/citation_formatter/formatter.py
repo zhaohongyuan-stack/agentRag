@@ -62,14 +62,16 @@ class CitationFormatter:
         """
         生成编号引用列表
 
-        对证据项去重后按出现顺序编号。
+        对证据项去重后按出现顺序编号。每条引用携带 source_path（原始文件相对路径），
+        供前端溯源链接 /api/files/preview?path=<source_path> 使用。
 
         Args:
             evidence_items: 证据项列表（EvidenceItem 对象或字典）
 
         Returns:
             编号引用列表，例如:
-            [{"index": 1, "citation": "《...》第43条", "source_doc": "...", "chunk_id": "..."}]
+            [{"index": 1, "citation": "《...》第43条", "source_doc": "...",
+              "chunk_id": "...", "source_path": "银行监管/xxx.pdf"}]
         """
         result: List[Dict[str, Any]] = []
         seen: set = set()
@@ -85,11 +87,20 @@ class CitationFormatter:
             seen.add(citation)
             index += 1
 
+            # source_path 优先取顶层，兜底取 metadata.source_path
+            metadata = item.get("metadata") or {}
+            source_path = (
+                item.get("source_path", "")
+                or metadata.get("source_path", "")
+                or ""
+            )
+
             result.append({
                 "index": str(index),
                 "citation": citation,
                 "source_doc": item.get("source_doc") or item.get("doc_name") or "",
                 "chunk_id": item.get("chunk_id", ""),
+                "source_path": source_path,
             })
 
         return result

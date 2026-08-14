@@ -174,6 +174,7 @@ class RetrievalToolFactory:
         hits = []
         for hit in result.hits or []:
             content = hit.get("content", "") or ""
+            metadata = hit.get("metadata", {}) or {}
             hits.append({
                 "chunk_id": hit.get("chunk_id", ""),
                 "content": content[:_CHUNK_CONTENT_LIMIT],
@@ -184,6 +185,8 @@ class RetrievalToolFactory:
                     or hit.get("doc_name")
                     or hit.get("doc_id", "")
                 ),
+                "table_name": metadata.get("table_name", ""),
+                "hierarchy_path": hit.get("hierarchy_path", ""),
             })
 
         return {
@@ -387,12 +390,14 @@ class RetrievalToolFactory:
         hits = []
         for hit in raw_hits:
             content = hit.get("content", "") or ""
+            metadata = hit.get("metadata", {}) or {}
             hits.append({
                 "chunk_id": hit.get("chunk_id", ""),
                 "content": content[:_TABLE_CONTENT_LIMIT],
-                "table_name": hit.get("table_name", ""),
-                "sheet_name": hit.get("sheet_name", ""),
-                "cell_ref": hit.get("cell_ref", ""),
+                "table_name": hit.get("table_name", "") or metadata.get("table_name", ""),
+                "sheet_name": hit.get("sheet_name", "") or metadata.get("sheet_name", ""),
+                "cell_ref": hit.get("cell_ref", "") or metadata.get("cell", ""),
+                "hierarchy_path": hit.get("hierarchy_path", ""),
             })
 
         return {
@@ -490,22 +495,37 @@ class RetrievalToolFactory:
             logger.exception("get_cell_value 调用异常")
             return {"success": False, "error": f"单元格检索异常: {e}"}
 
-        # 按 cell_ref / row_label / column_label 过滤
+        # 按 cell_ref / row_label / column_label 过滤（字段在 metadata 中）
+        def _get_field(hit, field_name):
+            """优先从顶层获取，否则从 metadata 获取"""
+            val = hit.get(field_name, "")
+            if val:
+                return val
+            metadata = hit.get("metadata", {}) or {}
+            # 字段名映射: cell_ref → cell, row_label → row_label, column_label → column_label
+            meta_key = field_name
+            if field_name == "cell_ref":
+                meta_key = "cell"
+            return metadata.get(meta_key, "")
+
         if cell_ref:
-            raw_hits = [h for h in raw_hits if h.get("cell_ref") == cell_ref]
+            raw_hits = [h for h in raw_hits if _get_field(h, "cell_ref") == cell_ref]
         if row_label:
-            raw_hits = [h for h in raw_hits if h.get("row_label") == row_label]
+            raw_hits = [h for h in raw_hits if _get_field(h, "row_label") == row_label]
         if column_label:
-            raw_hits = [h for h in raw_hits if h.get("column_label") == column_label]
+            raw_hits = [h for h in raw_hits if _get_field(h, "column_label") == column_label]
 
         cells = []
         for hit in raw_hits:
+            metadata = hit.get("metadata", {}) or {}
             cells.append({
                 "chunk_id": hit.get("chunk_id", ""),
                 "content": hit.get("content", ""),
-                "cell_ref": hit.get("cell_ref", ""),
-                "row_label": hit.get("row_label", ""),
-                "column_label": hit.get("column_label", ""),
+                "cell_ref": _get_field(hit, "cell_ref"),
+                "row_label": _get_field(hit, "row_label"),
+                "column_label": _get_field(hit, "column_label"),
+                "value": metadata.get("value", ""),
+                "table_name": metadata.get("table_name", ""),
             })
 
         return {

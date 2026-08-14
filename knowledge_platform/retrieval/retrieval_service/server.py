@@ -131,9 +131,55 @@ def search_chunks(req: ChunkSearchRequest):
     return results
 
 
+# ── 接口三：重新加载知识库（索引重建）──
+class ReloadRequest(BaseModel):
+    force: bool = True
+
+
+@app.post("/api/v1/reload")
+def reload_kb(req: ReloadRequest):
+    """重新加载知识库数据并重建索引"""
+    global _api
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("[Retrieval] 收到重新加载请求, force=%s", req.force)
+    print("[Retrieval] 收到重新加载请求, force=", req.force)
+
+    try:
+        old_doc_count = _api.doc_count if _api else 0
+        old_chunk_count = _api.chunk_count if _api else 0
+
+        # 重新构建并加载
+        _api = _build_retrieval_api()
+        _api.load("regulatory_docs/")
+
+        new_doc_count = _api.doc_count if _api else 0
+        new_chunk_count = _api.chunk_count if _api else 0
+
+        logger.info("[Retrieval] 重新加载完成: docs %d→%d, chunks %d→%d",
+                     old_doc_count, new_doc_count, old_chunk_count, new_chunk_count)
+        print(f"[Retrieval] 重新加载完成: docs {old_doc_count}→{new_doc_count}, chunks {old_chunk_count}→{new_chunk_count}")
+
+        return {
+            "status": "ok",
+            "message": "知识库重新加载完成",
+            "previous": {"docs": old_doc_count, "chunks": old_chunk_count},
+            "current": {"docs": new_doc_count, "chunks": new_chunk_count},
+        }
+    except Exception as e:
+        logger.error("[Retrieval] 重新加载失败: %s", e, exc_info=True)
+        print(f"[Retrieval] 重新加载失败: {e}")
+        return {
+            "status": "error",
+            "message": f"重新加载失败: {e}",
+        }
+
+
 # ── 直接启动 ──
 if __name__ == "__main__":
     import os
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    _host = os.environ.get("APP_HOST", "0.0.0.0")
+    _port = int(os.environ.get("APP_PORT", "8000"))
+    uvicorn.run(app, host=_host, port=_port)

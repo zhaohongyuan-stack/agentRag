@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Cache & data
+**/.cache/
+*.npy
+*.pkl
+
+# Docs & reports
+docs/
+evaluation/
+ace-rag-deployment-report/
+ecs-frontend-plan/
+.trae-html-share-packages/
+*.md
+!README.md
+
+# IDE
+.vscode
+.idea
+.trae/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db

@@ -57,3 +57,19 @@ Thumbs.db
 
 # 原始设计文档（不提交）
 docx/
+
+# 临时脚本（调试/同步/修复/诊断，下划线前缀）
+_*.py
+
+# 备份文件
+*.bak_*
+
+# TRAE 临时产物
+.trae-html-share-packages/
+server_sync/
+
+# 临时报告目录
+ace-rag-deployment-report/
+ecs-frontend-plan/
+文件分类/
+版本报告.md

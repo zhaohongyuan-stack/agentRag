@@ -9,7 +9,17 @@
 """
 
 from .handler import RequestHandler
-from .models import HealthResponse, QueryRequest, QueryResponse
+from .models import (
+    ConversationCreate,
+    HealthResponse,
+    LoginRequest,
+    LoginResponse,
+    QARequest,
+    QueryRequest,
+    QueryResponse,
+    ReviewCreate,
+    SuggestionCreate,
+)
 from .retrieval_client import RetrievalClient, RetrievalResult
 
 __all__ = [
@@ -19,4 +29,10 @@ __all__ = [
     "HealthResponse",
     "RetrievalClient",
     "RetrievalResult",
+    "LoginRequest",
+    "LoginResponse",
+    "ConversationCreate",
+    "ReviewCreate",
+    "SuggestionCreate",
+    "QARequest",
 ]

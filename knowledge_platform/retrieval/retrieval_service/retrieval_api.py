@@ -517,6 +517,7 @@ class RetrievalAPI:
         allowed: Optional[set] = None
         filters_applied: Dict[str, Any] = {}
         _skip_phase0 = req.strategy in (RetrievalStrategy.TABLE, RetrievalStrategy.RELATION)
+        _doc_name_locked = False  # doc_name 指定但未找到时锁定，阻止全库回退
         if req.filters and self.metadata and not _skip_phase0:
             _t_p0 = _time.time()
             print(f"  [Phase 0] 元数据过滤 ...  filters={req.filters}")
@@ -525,10 +526,56 @@ class RetrievalAPI:
             )
             filters_applied = dict(req.filters)
             if not allowed:
-                print(f"  [Phase 0] 过滤后无匹配 chunk，返回空结果  ({_time.time() - _t_p0:.3f}s)")
-                return []
-            print(f"  [Phase 0] 过滤后允许 {len(allowed)} / {self._store.chunk_count} chunks  "
-                  f"({_time.time() - _t_p0:.3f}s)")
+                # 渐进式回退：逐步去掉过滤条件直到命中
+                _fallback_to_full = False
+                if "doc_name" in req.filters:
+                    doc_name_val = req.filters["doc_name"]
+                    # 检查是否为扩展格式
+                    if isinstance(doc_name_val, dict):
+                        doc_name_val = doc_name_val.get("value", "")
+                    other_filters = {k: v for k, v in req.filters.items() if k != "doc_name"}
+
+                    # 第1步：尝试模糊匹配 doc_name（去虚词 + bigram 相似度 + doc_title）
+                    print(f"  [Phase 0] doc_name 精确匹配无命中，尝试模糊匹配 doc_name='{doc_name_val}'")
+                    fuzzy_chunk_ids = self.metadata.search_fuzzy_doc_name(
+                        doc_name_val, other_filters
+                    )
+                    if fuzzy_chunk_ids:
+                        # 模糊匹配有结果，转换为 index 集合
+                        chunk_id_list = self._store.chunk_ids
+                        cid_set = set(fuzzy_chunk_ids)
+                        allowed = {i for i, cid in enumerate(chunk_id_list) if cid in cid_set}
+                        filters_applied = dict(req.filters)
+                        filters_applied["_fuzzy_doc_name"] = True
+                        print(f"  [Phase 0] doc_name 模糊匹配命中 {len(allowed)} chunks")
+                    elif other_filters:
+                        # 第2步：模糊匹配也无结果，去掉doc_name保留其他过滤
+                        print(f"  [Phase 0] doc_name 模糊匹配也无命中，回退去掉doc_name重试 filters={other_filters}")
+                        allowed = self.metadata.get_allowed_indices(
+                            other_filters, self._store.chunk_ids
+                        )
+                        filters_applied = dict(other_filters)
+                    else:
+                        # ⚠️ doc_name 指定但未找到（精确+模糊均失败），不回退全库！
+                        # 返回空集合（非 None），让下游返回0命中 → 系统拒答
+                        # 这避免了"用户问A文档，系统从B文档回答"的严重错误
+                        allowed = set()
+                        _doc_name_locked = True
+                        filters_applied = dict(req.filters)
+                        filters_applied["_doc_not_found"] = True
+                        print(f"  [Phase 0] ⚠️ doc_name='{doc_name_val}' 未在知识库中找到"
+                              f"（精确+模糊均失败），不回退全库检索，将返回0命中")
+                # 第3步：去掉doc_name后仍无匹配，去掉所有过滤条件 → 全库检索
+                #    但如果 doc_name 锁定（指定了文档但不存在），不执行全库回退
+                if not _fallback_to_full and not allowed and not _doc_name_locked:
+                    print(f"  [Phase 0] 所有过滤条件均无匹配，回退全库检索 ({self._store.chunk_count} chunks)")
+                    _fallback_to_full = True
+                    filters_applied = {}
+                if _fallback_to_full:
+                    allowed = None  # 全库检索（下游 allowed is None 即不过滤）
+            if allowed is not None:
+                print(f"  [Phase 0] 过滤后允许 {len(allowed)} / {self._store.chunk_count} chunks  "
+                      f"({_time.time() - _t_p0:.3f}s)")
         elif _skip_phase0:
             print(f"  [Phase 0] 跳过元数据过滤（策略={req.strategy.value}，由结构化检索器自行处理）")
         else:

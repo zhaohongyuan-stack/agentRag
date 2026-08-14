@@ -21,12 +21,52 @@ Phase 1 简化版（仍保留）:
 """
 
 import hashlib
+import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .deduplicator import Deduplicator
 from .parent_aggregator import ParentAggregator
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 表格分区关键词库（方案三：证据层硬过滤）
+# 分层优先级匹配：Tier 1 > Tier 2 > Tier 3
+# 同层内按关键词长度降序排列（长词优先，避免短词截断长词）
+# ============================================================
+
+# Tier 1: 精确分区名（最高优先级，直接对应表格分区）
+_TIER1_KEYWORDS: List[Tuple[str, str]] = [
+    ("银行业金融机构", "1. 银行业金融机构"),
+    ("商业银行合计", "其中：商业银行合计"),
+    ("大型商业银行", "2. 大型商业银行"),
+    ("股份制商业银行", "3. 股份制商业银行"),
+    ("城市商业银行", "4. 城市商业银行"),
+    ("农村金融机构", "5. 农村金融机构"),
+    ("其他类金融机构", "6. 其他类金融机构"),
+    ("外资银行", "6. 其他类金融机构"),
+    ("民营银行", "6. 其他类金融机构"),
+]
+
+# Tier 2: 机构类型简称（中等优先级，需较独特才能匹配）
+_TIER2_KEYWORDS: List[Tuple[str, str]] = [
+    ("股份制", "3. 股份制商业银行"),
+    ("城市商业", "4. 城市商业银行"),
+    ("农商", "5. 农村金融机构"),
+    ("农信", "5. 农村金融机构"),
+    ("其他类", "6. 其他类金融机构"),
+]
+
+# Tier 3: 宽泛关键词（最低优先级，仅当 Tier 1/2 均未匹配时生效）
+# 注意："银行业"会匹配文档标题中的"银行业"，所以放最低优先级
+_TIER3_KEYWORDS: List[Tuple[str, str]] = [
+    ("银行业", "1. 银行业金融机构"),
+    ("商业银行", "其中：商业银行合计"),
+    ("农村", "5. 农村金融机构"),
+]
 
 
 @dataclass
@@ -154,6 +194,7 @@ class EvidenceBuilder:
         hits: List[dict],
         claims: List[Dict[str, Any]],
         query_text: str = "",
+        retrieval_filters: Optional[Dict[str, Any]] = None,
     ) -> EvidenceBundle:
         """
         组装证据包
@@ -207,12 +248,17 @@ class EvidenceBuilder:
         # 4. 检测冲突
         conflicts = self._detect_conflicts(evidence_items)
 
+        # 4.5 证据分区过滤（方案三：证据层硬过滤）
+        evidence_items = self._filter_by_primary_partition(
+            evidence_items, conflicts, query_text, retrieval_filters
+        )
+
         # 5. 识别缺失条件
         missing_conditions = self._find_missing(claim_slots)
 
         # 6. 计算充分性评分
         sufficiency_score = self._calculate_sufficiency(
-            claim_slots, evidence_items, conflicts
+            claim_slots, evidence_items, conflicts, missing_conditions
         )
 
         is_sufficient = sufficiency_score >= self._threshold
@@ -322,10 +368,9 @@ class EvidenceBuilder:
                 claim.evidence_ids = matched_evidence[:3]  # 最多绑定3条证据
                 claim.status = "supported"
             else:
-                # 没有精确匹配，但有证据可用 → 标记为 pending（后续 LLM 判断）
-                # Phase 1: 有证据就标记为 supported
-                claim.evidence_ids = [evidence[0].evidence_id]
-                claim.status = "supported" if evidence else "missing"
+                # 没有精确匹配，标记为 pending（后续 Evaluator Agent 判断）
+                claim.evidence_ids = []
+                claim.status = "pending"
 
         return claims
 
@@ -364,13 +409,66 @@ class EvidenceBuilder:
                     "evidence_ids": [ev.evidence_id for ev in items],
                 })
 
+        # 表格分区冲突检测：同一指标在同一文档的多个 table_name 分区出现
+        conflicts.extend(self._detect_table_partition_conflicts(evidence))
+
+        return conflicts
+
+    def _detect_table_partition_conflicts(
+        self, evidence: List[EvidenceItem]
+    ) -> List[Dict[str, Any]]:
+        """
+        表格分区冲突检测（builder 内部版本）
+
+        同一指标（metric_name）在同一文档的多个 table_name 分区中出现时，
+        标记为分区冲突。返回 dict 格式，与 _detect_conflicts 保持一致。
+        """
+        conflicts: List[Dict[str, Any]] = []
+
+        # metric_name + source_doc → table_name → [EvidenceItem, ...]
+        metric_table_map: Dict[Tuple[str, str], Dict[str, List[EvidenceItem]]] = {}
+
+        for ev in evidence:
+            metadata = ev.metadata or {}
+            metric_name = metadata.get("metric_name", "")
+            table_name = metadata.get("table_name", "")
+            if not metric_name or not table_name:
+                continue
+
+            key = (metric_name, ev.source_doc)
+            if key not in metric_table_map:
+                metric_table_map[key] = {}
+            metric_table_map[key].setdefault(table_name, []).append(ev)
+
+        for (metric_name, doc_name), table_groups in metric_table_map.items():
+            if len(table_groups) < 2:
+                continue
+
+            partitions = list(table_groups.keys())
+            evidence_ids = [
+                ev.evidence_id for evs in table_groups.values() for ev in evs
+            ]
+
+            conflicts.append({
+                "type": "table_partition_conflict",
+                "description": (
+                    f"指标 '{metric_name}' 在文档 '{doc_name}' 的 "
+                    f"{len(partitions)} 个表格分区中均有数据："
+                    f"{', '.join(partitions)}。需确认问题所指的具体分区。"
+                ),
+                "partitions": partitions,
+                "metric_name": metric_name,
+                "source_doc": doc_name,
+                "evidence_ids": evidence_ids,
+            })
+
         return conflicts
 
     def _find_missing(self, claims: List[ClaimSlot]) -> List[str]:
-        """识别缺失条件"""
+        """识别缺失条件（包括 missing 和 pending 状态的声明）"""
         missing = []
         for claim in claims:
-            if claim.status == "missing":
+            if claim.status in ("missing", "pending"):
                 missing.append(claim.description)
         return missing
 
@@ -379,33 +477,162 @@ class EvidenceBuilder:
         claims: List[ClaimSlot],
         evidence: List[EvidenceItem],
         conflicts: List[Dict[str, Any]],
+        missing_conditions: List[str],
     ) -> float:
         """
         计算证据充分性评分
 
-        评分公式（Phase 1 简化版）:
-          score = claim_coverage × evidence_quality × (1 - conflict_penalty)
-
-          claim_coverage = supported_claims / total_claims
-          evidence_quality = min(evidence_count / expected_count, 1.0)
-          conflict_penalty = 0.1 × conflict_count
+        使用五维度加权评分器（SufficiencyScorer）替代简化公式：
+          - 覆盖率 (30%)
+          - 来源权威性 (15%)
+          - 版本有效性 (20%)
+          - 条件完整性 (15%)
+          - 多通道一致性 (20%)
+          - 冲突惩罚 + 缺失惩罚
         """
-        if not claims:
-            # 无声明槽位时，有证据即可
-            return 1.0 if evidence else 0.0
+        # 无证据时直接返回0分
+        if not evidence:
+            return 0.0
 
-        # 声明覆盖率
-        supported = sum(1 for c in claims if c.status == "supported")
-        claim_coverage = supported / len(claims)
+        from agent_platform.evidence.sufficiency_scorer.scorer import SufficiencyScorer
 
-        # 证据质量（有3条以上高质量证据为满分）
-        expected_count = 3
-        evidence_quality = min(len(evidence) / expected_count, 1.0)
+        # 构建临时 EvidenceBundle 供 SufficiencyScorer 使用
+        temp_bundle = EvidenceBundle(
+            bundle_id="temp",
+            claim_slots=claims,
+            evidence_items=evidence,
+            conflicts=conflicts,
+            missing_conditions=missing_conditions,
+            sufficiency_threshold=self._threshold,
+        )
 
-        # 冲突惩罚
-        conflict_penalty = 0.1 * len(conflicts)
+        scorer = SufficiencyScorer(threshold=self._threshold)
+        result = scorer.score(temp_bundle)
+        return result.score
 
-        score = claim_coverage * evidence_quality * (1.0 - conflict_penalty)
-        score = max(0.0, min(1.0, score))
+    # ============================================================
+    # 方案三：证据层分区过滤
+    # ============================================================
 
-        return score
+    def _filter_by_primary_partition(
+        self,
+        evidence_items: List[EvidenceItem],
+        conflicts: List[Dict[str, Any]],
+        query_text: str,
+        retrieval_filters: Optional[Dict[str, Any]] = None,
+    ) -> List[EvidenceItem]:
+        """
+        当检测到分区冲突时，只保留与查询最相关分区的证据。
+
+        检索结果优先原则：如果检索请求已携带明确的 table_name 过滤条件，
+        直接信任检索层决策，跳过分区推断和过滤。
+        """
+        # ── 检索结果优先 ──
+        if retrieval_filters and retrieval_filters.get("table_name"):
+            logger.info(
+                "[证据层] 检索结果优先：table_name='%s' 已在检索层过滤，"
+                "跳过证据层分区推断",
+                retrieval_filters["table_name"],
+            )
+            return evidence_items
+
+        # ── 无分区冲突时原样返回 ──
+        partition_conflicts = [
+            c for c in conflicts
+            if c.get("type") == "table_partition_conflict"
+        ]
+        if not partition_conflicts:
+            return evidence_items
+
+        logger.info(
+            "[证据层] 检测到 %d 个分区冲突，启动证据分区过滤",
+            len(partition_conflicts),
+        )
+
+        # ── 推断主分区 ──
+        target_partition = self._infer_target_partition(query_text)
+
+        if target_partition:
+            # 保留主分区证据 + 无分区标记的证据
+            filtered = [
+                ev for ev in evidence_items
+                if not ev.metadata.get("table_name")
+                or ev.metadata.get("table_name") == target_partition
+            ]
+            if filtered:
+                logger.info(
+                    "[证据层] 证据分区过滤：目标分区='%s'，"
+                    "过滤前 %d 条 → 过滤后 %d 条",
+                    target_partition, len(evidence_items), len(filtered),
+                )
+                return filtered
+            # 安全兜底：推断出分区但过滤后为空，回退到过滤前
+            logger.warning(
+                "[证据层] 推断分区='%s' 但过滤后证据为空，回退到完整证据集",
+                target_partition,
+            )
+            return evidence_items
+
+        # ── 无法推断主分区：每分区保留 top-1 ──
+        logger.info(
+            "[证据层] 无法推断目标分区，执行按分区去重（每分区保留 top-1）"
+        )
+        return self._deduplicate_by_partition(evidence_items)
+
+    def _infer_target_partition(self, query_text: str) -> Optional[str]:
+        """
+        从查询文本推断目标表格分区。
+
+        采用分层优先级匹配：
+          Tier 1: 精确分区名（如"大型商业银行"）— 命中即返回
+          Tier 2: 机构类型简称（如"股份制"）— Tier 1 未命中时检查
+          Tier 3: 宽泛关键词（如"银行业"）— 仅当 Tier 1/2 均未命中
+
+        分层设计避免文档标题"银行业"覆盖问题中的"大型商业银行"。
+        """
+        if not query_text:
+            return None
+
+        # 按优先级依次检查三层关键词
+        for tier_name, tier_keywords in (
+            ("Tier1", _TIER1_KEYWORDS),
+            ("Tier2", _TIER2_KEYWORDS),
+            ("Tier3", _TIER3_KEYWORDS),
+        ):
+            # 同层内按关键词长度降序排列（长词优先，避免短词截断长词）
+            sorted_keywords = sorted(
+                tier_keywords, key=lambda x: len(x[0]), reverse=True
+            )
+            for keyword, partition in sorted_keywords:
+                if keyword in query_text:
+                    logger.debug(
+                        "[证据层] 分区推断(%s)：query 中匹配到 '%s' → '%s'",
+                        tier_name, keyword, partition,
+                    )
+                    return partition
+
+        logger.debug("[证据层] 分区推断：query 中未匹配到任何分区关键词")
+        return None
+
+    def _deduplicate_by_partition(
+        self, evidence_items: List[EvidenceItem]
+    ) -> List[EvidenceItem]:
+        """无法推断目标分区时，每个 table_name 分区只保留得分最高的一条"""
+        seen_partitions: Dict[str, EvidenceItem] = {}
+        no_partition: List[EvidenceItem] = []
+
+        for ev in evidence_items:  # 已按 score 降序排列
+            table_name = ev.metadata.get("table_name", "")
+            if not table_name:
+                no_partition.append(ev)
+                continue
+            if table_name not in seen_partitions:
+                seen_partitions[table_name] = ev
+
+        result = no_partition + list(seen_partitions.values())
+        logger.info(
+            "[证据层] 按分区去重：%d 条 → %d 条（%d 个分区各保留 top-1，无分区 %d 条）",
+            len(evidence_items), len(result),
+            len(seen_partitions), len(no_partition),
+        )
+        return result

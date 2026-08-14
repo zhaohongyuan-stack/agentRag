@@ -745,6 +745,115 @@ class RetrievalDB:
                 rows = conn.execute(query, params + [limit]).fetchall()
             return [r[0] for r in rows]
 
+    def search_fuzzy_doc_name(self, doc_name_value: str,
+                              other_filters: Dict[str, Any],
+                              limit: int = 999999) -> List[str]:
+        """
+        对 doc_name 做模糊匹配检索（精确 LIKE 匹配失败时的兜底方案）。
+
+        策略：
+          1. 查询所有 distinct (doc_name, doc_title) 对
+          2. Python 端用模糊匹配算法同时对 doc_name 和 doc_title 匹配
+          3. 用匹配到的 doc_name 列表做 IN 查询
+          4. 如有 other_filters，追加到 WHERE 条件
+
+        参数：
+          doc_name_value: 用户输入的文档名
+          other_filters:  除 doc_name 外的其他过滤条件
+          limit:          最多返回条数
+
+        返回：
+          匹配的 chunk_id 列表
+        """
+        from .metadata_retriever import _fuzzy_doc_name_match
+
+        if not doc_name_value:
+            return []
+
+        # 1. 查询所有 distinct (doc_name, doc_title) 对
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT doc_name, doc_title FROM documents WHERE doc_name != ''"
+            ).fetchall()
+
+        # 2. 模糊匹配 — 同时检查 doc_name 和 doc_title
+        #    场景：用户输入《银行函证工作操作指引》
+        #    doc_name = "398_财政部办公厅_..._银行函证工作操作指引.pdf"（太长，Jaccard 低）
+        #    doc_title = "银行函证工作操作指引"（完美匹配）
+        matched_doc_names = set()
+        for r in rows:
+            dn = str(r[0]) if r[0] else ""
+            dt = str(r[1]) if r[1] else ""
+            if _fuzzy_doc_name_match(doc_name_value, dn):
+                matched_doc_names.add(dn)
+            elif dt and _fuzzy_doc_name_match(doc_name_value, dt):
+                matched_doc_names.add(dn)
+
+        if not matched_doc_names:
+            return []
+
+        matched_list = list(matched_doc_names)
+
+        # 3. 构建 SQL 查询（doc_name IN (...) + other_filters）
+        conditions = ["d.doc_name IN ({})".format(
+            ",".join("?" * len(matched_list))
+        )]
+        params: List[Any] = list(matched_list)
+        needs_join = True
+
+        for field, condition in other_filters.items():
+            if field == "doc_name":
+                continue
+            if isinstance(condition, dict):
+                value = condition.get("value")
+                op = condition.get("op", "eq")
+            else:
+                value = condition
+                op = "eq"
+
+            if value is None or value == "":
+                continue
+
+            if field in self._CHUNK_FILTER_COLS:
+                col = f"c.{self._CHUNK_FILTER_COLS[field]}"
+            elif field in self._DOC_FILTER_COLS:
+                col = f"d.{self._DOC_FILTER_COLS[field]}"
+            elif field == self._KEYWORDS_FIELD:
+                col = "c.keywords_json"
+            else:
+                continue
+
+            if op == "eq":
+                if field in self._SUBSTRING_FIELDS:
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f"%{value}%")
+                elif field == self._KEYWORDS_FIELD:
+                    conditions.append(f"{col} LIKE ?")
+                    params.append(f'%"{value}"%')
+                else:
+                    conditions.append(f"{col} = ?")
+                    params.append(str(value))
+            elif op == "in":
+                if not isinstance(value, list):
+                    value = [value]
+                placeholders = ",".join("?" * len(value))
+                conditions.append(f"{col} IN ({placeholders})")
+                params.extend(str(v) for v in value)
+
+        where_clause = " AND ".join(conditions)
+        join_clause = " LEFT JOIN documents d ON c.doc_id = d.doc_id" if needs_join else ""
+
+        query = f"""
+            SELECT c.chunk_id
+            FROM chunks c{join_clause}
+            WHERE {where_clause}
+            ORDER BY c.id
+            LIMIT ?
+        """
+        with self._get_conn() as conn:
+            rows = conn.execute(query, params + [limit]).fetchall()
+        return [r[0] for r in rows]
+
     def list_field_values_db(self, field: str) -> List[str]:
         """
         列出某个字段的所有唯一值（DB 驱动，用于构建过滤选项 UI）。

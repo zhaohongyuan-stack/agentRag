@@ -14,6 +14,7 @@ LLM 客户端抽象层
 import json
 import logging
 import os
+import re
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -300,6 +301,7 @@ class LLMClient:
         response_format: Optional[Dict[str, str]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Any] = None,
+        thinking_disabled: bool = False,
         **kwargs,
     ) -> LLMResponse:
         """
@@ -311,6 +313,8 @@ class LLMClient:
             temperature: 温度参数
             max_tokens: 最大生成 token 数
             response_format: 响应格式（如 {"type": "json_object"}）
+            thinking_disabled: 关闭深度思考（DeepSeek 统一模型；结构化 JSON 任务用，
+                避免推理链占用 max_tokens 预算导致正文输出为空）
             tools: 可用工具定义列表（OpenAI Function Calling 格式），
                 每项形如 {"type": "function", "function": {"name", "description", "parameters"}}
             tool_choice: 工具选择策略，可选值:
@@ -338,6 +342,9 @@ class LLMClient:
         }
         if response_format:
             api_kwargs["response_format"] = response_format
+        if thinking_disabled:
+            # DeepSeek 官方 API：thinking.type=disabled 关闭推理链（非思考模式）
+            api_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
         if tools:
             api_kwargs["tools"] = tools
             # tool_choice 默认为 "auto"，仅在显式传入时设置
@@ -384,12 +391,15 @@ class LLMClient:
         use_model: Optional[str] = None,
         temperature: float = 0.1,
         max_tokens: int = 2048,
+        thinking_disabled: bool = False,
         **kwargs,
     ):
         """
         流式调用 LLM，逐 token yield。
         失败时抛异常（由调用方捕获回退非流式）。
         不支持 KeyPool 故障转移（流式已开始输出无法切换）。
+        thinking_disabled=True 时关闭深度思考（结构化 JSON 收集场景，
+        避免推理链占满 max_tokens 导致正文为空）。
         """
         model = use_model or self._model
         key = self._key_pool.next_key()
@@ -404,6 +414,8 @@ class LLMClient:
             "max_tokens": max_tokens,
             "stream": True,
         }
+        if thinking_disabled:
+            api_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
         api_kwargs.update(kwargs)
 
         logger.debug(
@@ -467,7 +479,13 @@ class LLMClient:
             "Authorization": f"Bearer {key}",
         }
 
-        resp = self._httpx_client.post(url, json=api_kwargs, headers=headers)
+        # extra_body 是 openai SDK 专用包装，httpx 直发时需内联到请求体
+        body = dict(api_kwargs)
+        extra = body.pop("extra_body", None)
+        if isinstance(extra, dict):
+            body.update(extra)
+
+        resp = self._httpx_client.post(url, json=body, headers=headers)
         resp.raise_for_status()
         data = resp.json()
 
@@ -520,22 +538,7 @@ class LLMClient:
             response_format={"type": "json_object"} if not self._mock else None,
         )
 
-        try:
-            # 尝试直接解析
-            return json.loads(response.content)
-        except json.JSONDecodeError:
-            # 尝试提取 JSON 块
-            content = response.content.strip()
-            if "```json" in content:
-                start = content.index("```json") + 7
-                end = content.index("```", start)
-                return json.loads(content[start:end].strip())
-            elif "```" in content:
-                start = content.index("```") + 3
-                end = content.index("```", start)
-                return json.loads(content[start:end].strip())
-            else:
-                raise ValueError(f"无法解析 LLM 响应为 JSON: {response.content[:200]}")
+        return parse_json_text(response.content)
 
     def chat_with_tools(
         self,
@@ -764,6 +767,97 @@ class LLMClient:
         if self._httpx_client:
             self._httpx_client.close()
             self._httpx_client = None
+
+
+# ============================================================
+# JSON 宽容解析（模块级，供 chat_json 与流式 JSON 收集共用）
+# ============================================================
+
+
+def parse_json_text(content: str) -> Dict[str, Any]:
+    """宽容的 JSON 文本解析
+
+    依次尝试：
+      1. 直接解析
+      2. ```json / ``` 代码围栏提取
+      3. 首个 { 到末尾 } 的平衡扫描（容忍前后缀文字）
+      4. 截断修复（LLM 输出被 max_tokens 截断时补全未闭合结构）
+
+    Raises:
+        ValueError: 全部策略失败
+    """
+    content = (content or "").strip()
+    if not content:
+        raise ValueError("无法解析 LLM 响应为 JSON: 空响应")
+    # 1) 直接解析
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+    # 2) 代码围栏
+    if "```" in content:
+        try:
+            if "```json" in content:
+                start = content.index("```json") + 7
+            else:
+                start = content.index("```") + 3
+            end = content.index("```", start)
+            return json.loads(content[start:end].strip())
+        except (ValueError, json.JSONDecodeError):
+            pass
+    # 3) 平衡扫描：从首个 { 到最后一个 } 逐段尝试
+    start = content.find("{")
+    if start >= 0:
+        end = content.rfind("}")
+        while end > start:
+            try:
+                return json.loads(content[start:end + 1])
+            except json.JSONDecodeError:
+                end = content.rfind("}", start, end)
+    # 4) 截断修复
+    if start >= 0:
+        repaired = _repair_truncated_json(content[start:])
+        if repaired is not None:
+            logger.warning("[LLMClient] JSON 响应疑似被截断，已启发式修复后解析成功")
+            return repaired
+    raise ValueError(f"无法解析 LLM 响应为 JSON: {content[:200]}")
+
+
+def _repair_truncated_json(text: str) -> Optional[Dict[str, Any]]:
+    """尝试修复被截断的 JSON（补全未闭合字符串/括号，剔除尾部残缺成员）"""
+    stack: List[str] = []
+    in_str = False
+    esc = False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append(ch)
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+    if not stack and not in_str:
+        return None  # 结构完整，不是截断问题
+    out = text
+    if in_str:
+        out += '"'
+    # 剔除尾部残缺成员：, "key": "半截值 / , "key": / , "半截键
+    out = re.sub(r',\s*"(?:[^"\\]|\\.)*"\s*:\s*(?:"(?:[^"\\]|\\.)*")?\s*$', '', out)
+    out = re.sub(r',\s*$', '', out)
+    for opener in reversed(stack):
+        out += "}" if opener == "{" else "]"
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        return None
 
 
 # ============================================================

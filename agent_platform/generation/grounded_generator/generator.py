@@ -461,6 +461,7 @@ class GroundedGenerator:
         ambiguities: Optional[List[Dict[str, Any]]] = None,
         options: Optional[List[Dict[str, Any]]] = None,
         prompt_mode: str = "normal",
+        verification_feedback: str = "",
     ) -> GeneratedAnswer:
         """
         生成回答
@@ -472,6 +473,7 @@ class GroundedGenerator:
             ambiguities: 歧义列表（保留接口，暂不在此处理）
             options: 选项列表，格式 [{"label": "A", "text": "...", "type": "numeric/textual"}]
             prompt_mode: 生成模式 "normal" | "calculate_and_match" | "verify_each_option"
+            verification_feedback: Verifier 校验反馈（如“回答未给出选项字母”），非空时注入提示词纠正回答形式
 
         Returns:
             GeneratedAnswer 对象
@@ -499,7 +501,7 @@ class GroundedGenerator:
 
         # LLM 生成路径
         try:
-            return self._generate_with_llm(intent, evidence_bundle, query_text, options, prompt_mode)
+            return self._generate_with_llm(intent, evidence_bundle, query_text, options, prompt_mode, verification_feedback)
         except Exception as e:
             logger.warning(f"LLM 生成失败，尝试规则计算兜底: {e}", exc_info=True)
             # 数值计算选择题（LLM 不可用时的可靠性保障）：
@@ -635,6 +637,7 @@ class GroundedGenerator:
         query_text: str,
         options: Optional[List[Dict[str, Any]]] = None,
         prompt_mode: str = "normal",
+        verification_feedback: str = "",
     ) -> GeneratedAnswer:
         """使用 LLM 生成回答"""
         # 1. 规划回答结构
@@ -660,6 +663,12 @@ class GroundedGenerator:
         }
         if options:
             user_prompt_data["options"] = options
+        if verification_feedback:
+            # Verifier 纠正性反馈：上一版回答未满足问题形式要求，本轮必须修正
+            user_prompt_data["verification_feedback"] = (
+                f"上一版回答存在形式问题：{verification_feedback}。"
+                "本次生成必须修正该问题（如选项题必须明确给出所选选项字母）。"
+            )
 
         user_prompt = json.dumps(user_prompt_data, ensure_ascii=False)
 

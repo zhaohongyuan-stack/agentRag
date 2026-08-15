@@ -30,6 +30,11 @@ llm = [
 redis = [
     "redis[hiredis]>=5.0.0",
 ]
+# LangGraph Agent 编排（USE_LANGGRAPH=true 时启用，未安装时自动回退手写编排）
+langgraph = [
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",

@@ -1,7 +1,8 @@
 """
 Verifier Agent - 验证Agent
 
-声明级验证 + 有限次补充检索闭环：
+问题匹配校验 + 声明级验证 + 有限次补充检索闭环：
+  0. 问题匹配校验：回答是否满足问题的形式要求（如 ABCD 选项、数值计算）
   1. 整体一致性检查：回答是否与证据一致
   2. 声明级验证：拆分回答为声明，逐个检查证据支撑
   3. 有限次补充检索：无证据声明触发补充检索（受预算控制）
@@ -10,7 +11,7 @@ Verifier Agent - 验证Agent
 
 import json
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent_platform.runtime.llm_client import LLMClient, LLMMessage
 
@@ -36,8 +37,15 @@ class VerifierAgent(BaseAgent):
         """构建Verifier提示词"""
         system_prompt = (
             "你是一个银行业/保险业监管知识问答系统的验证Agent。\n"
-            "你的职责是验证生成回答中的每个声明是否有证据支撑。\n\n"
-            "## 验证流程\n"
+            "你的职责分两部分：先校验回答是否符合问题的要求，再验证每个声明是否有证据支撑。\n\n"
+            "## 第一步：问题要求匹配校验（必须执行）\n"
+            "检查生成的回答是否满足问题的形式要求：\n"
+            "- 若问题给出了选项（选项A/选项B/选项C/选项D 或 A.B.C.D 等），回答必须明确给出所选选项字母（如“答案：B”）；\n"
+            "  只给出计算结果或描述而未指明选项字母的，判定为不符合，并在 issue 中说明应选择哪个选项及理由\n"
+            "- 若问题要求数值计算/变化量，回答必须给出明确的数值结果与计算过程\n"
+            "- 若问题针对特定文档/报表，回答必须基于该文档作答\n"
+            "- 若问题要求判断对错（如“某某数值是否正确”），回答必须给出明确的判断结论\n\n"
+            "## 第二步：声明级验证\n"
             "1. 将回答拆分为多个独立声明（每个含具体数值或结论的句子）\n"
             "2. 对每个声明，在证据中查找是否有直接支撑\n"
             "3. 有证据支撑的标记verified，无证据的标记unverified\n"
@@ -45,6 +53,7 @@ class VerifierAgent(BaseAgent):
             "\n"
             "## 你必须输出以下JSON格式\n"
             "{\n"
+            '  "query_conformance": {"conforms": true, "issue": ""},\n'
             '  "verified": false,\n'
             '  "claims": [\n'
             '    {"text": "声明内容", "status": "verified", "evidence_id": "ev-xxx"},\n'
@@ -59,8 +68,10 @@ class VerifierAgent(BaseAgent):
             "- 条款引用必须找到对应条款号的证据\n"
             "- 推论性声明（如\"满足监管要求\"）需找到阈值依据\n"
             "- 如果声明是对证据原文的直接引用，标记verified\n"
+            "- 由证据数值经加减乘除推导出的计算声明，若证据中有原始数值且算式正确，标记verified\n"
             "- needs_retry=true时必须提供retry_query\n"
             "- 所有声明都verified时needs_retry=false\n"
+            "- query_conformance.conforms=false时，在issue中说明不符合之处及应如何回答\n"
         )
 
         # 构建回答和证据信息（证据做截断优化，避免超长导致 LLM 超时）
@@ -115,6 +126,20 @@ class VerifierAgent(BaseAgent):
         verified = response.get("verified", False)
         needs_retry = response.get("needs_retry", False)
 
+        # 问题要求匹配校验结果（缺失时默认符合，向后兼容）
+        conformance = response.get("query_conformance") or {}
+        conforms = conformance.get("conforms", True)
+        conformance_issue = (conformance.get("issue") or "").strip()
+
+        claims = list(response.get("claims", []))
+        # 不符合问题要求时，以显式声明的形式暴露给前端/日志
+        if not conforms and conformance_issue:
+            claims.insert(0, {
+                "text": f"回答不符合问题要求：{conformance_issue}",
+                "status": "unverified",
+                "reason": "query_conformance",
+            })
+
         if verified and not needs_retry:
             decision = "verified"
         elif needs_retry:
@@ -124,19 +149,35 @@ class VerifierAgent(BaseAgent):
 
         structured = {
             "verified": verified,
-            "claims": response.get("claims", []),
+            "claims": claims,
             "needs_retry": needs_retry,
             "retry_query": response.get("retry_query", ""),
             "unverified_count": response.get("unverified_count", 0),
+            "query_conformance": {
+                "conforms": conforms,
+                "issue": conformance_issue,
+            },
         }
 
         return decision, structured
 
-    def run(self, context: AgentContext) -> AgentResult:
+    def run(self, context: AgentContext, thinking_callback: Optional[Callable[[str], None]] = None) -> AgentResult:
         """执行验证，将结果写入context"""
-        result = super().run(context)
+        result = super().run(context, thinking_callback=thinking_callback)
 
         # 将验证结果写入context
-        context.verification_result = result.data
+        vr = result.data
+        # 问题要求不匹配（如选项题未给出 ABCD 字母）：强制触发一次纠正性重试，
+        # 借助 verifier_retry 通道重新检索+重新生成，让 Generator 有机会按问题形式补全回答
+        conformance = vr.get("query_conformance") or {}
+        if not conformance.get("conforms", True) and not vr.get("needs_retry"):
+            vr["needs_retry"] = True
+            if not (vr.get("retry_query") or "").strip():
+                vr["retry_query"] = context.query
+            logger.info(
+                "[Verifier] 回答不符合问题要求，触发纠正性重试: %s",
+                conformance.get("issue", "")[:120],
+            )
+        context.verification_result = vr
 
         return result

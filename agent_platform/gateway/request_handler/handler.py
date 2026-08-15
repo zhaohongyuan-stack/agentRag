@@ -63,6 +63,10 @@ from ..session_handler.session_state import SessionManager
 
 logger = logging.getLogger(__name__)
 
+# ── LangGraph feature flag（阶段3）──
+# USE_LANGGRAPH=true 时启用图编排流程；图流程异常自动回退手写 _run_agent_flow
+USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "").strip().lower() in ("1", "true", "yes", "on")
+
 
 def _now_ms() -> float:
     """高精度当前时间戳（毫秒）"""
@@ -317,6 +321,30 @@ class RequestHandler:
                 route_decision.channels = list(route_decision.channels) + ["table"]
 
             if self._enable_agent_loop:
+                # ── LangGraph 图编排（USE_LANGGRAPH=true 启用）──
+                # 图流程异常 → 回退手写 Agent 流程；手写流程再异常 → 下方回退 V1
+                if USE_LANGGRAPH:
+                    try:
+                        return self._run_graph_flow(
+                            request=request,
+                            request_id=request_id,
+                            session=session,
+                            sm=sm,
+                            start_time=start_time,
+                            query_spec=query_spec,
+                            route_decision=route_decision,
+                            rewritten=rewritten,
+                            search_query=search_query,
+                            trace_collector=trace_collector if self._enable_trace else None,
+                            event_callback=self._event_callback,
+                        )
+                    except Exception as graph_err:
+                        logger.warning(
+                            f"[LangGraph] 图流程异常，回退手写Agent流程: {graph_err}",
+                            exc_info=True,
+                        )
+                        # 状态机可能停在中间状态，重置到 ROUTED 后重走手写流程
+                        self._reset_sm_for_fallback(sm, query_spec, route_decision)
                 try:
                     return self._run_agent_flow(
                         request=request,
@@ -338,26 +366,7 @@ class RequestHandler:
                         exc_info=True,
                     )
                     # 状态机可能停在中间状态，重置到 ROUTED 后重新走 V1
-                    if not sm.is_terminal():
-                        try:
-                            # 从非终态回到 ROUTED 需要先重置（V1流程会自己推进状态）
-                            sm.reset()
-                            sm.start()
-                            sm.transition(AgentState.NORMALIZED, {"step": "normalize_fallback"})
-                            sm.transition(AgentState.CONTEXT_RESOLVED, {"step": "context_resolve_fallback"})
-                            sm.transition(AgentState.ANALYZED, {
-                                "step": "analyze_fallback",
-                                "intent": query_spec.intent,
-                                "complexity": query_spec.complexity,
-                            })
-                            sm.transition(AgentState.ROUTED, {
-                                "step": "route_fallback",
-                                "level": route_decision.level,
-                                "channels": route_decision.channels,
-                            })
-                        except Exception:
-                            # 状态机重置失败，继续走V1（trace可能不完整但功能可用）
-                            logger.error("[Phase5] 状态机回退重置失败，继续执行V1流程")
+                    self._reset_sm_for_fallback(sm, query_spec, route_decision)
 
             # V1 线性检索流程（fallback 或 enable_agent_loop=False）
             return self._run_v1_linear_flow(
@@ -428,6 +437,121 @@ class RequestHandler:
     # ──────────────────────────────────────────────────────
     # Phase 5: Agent 协作流程
     # ──────────────────────────────────────────────────────
+
+    def _reset_sm_for_fallback(
+        self,
+        sm: StateMachine,
+        query_spec: QuerySpec,
+        route_decision: Any,
+    ) -> None:
+        """
+        流程异常后将状态机重置到 ROUTED，供回退流程重新推进
+
+        容错：重置失败不阻断回退（trace 可能不完整但功能可用）。
+        """
+        if sm.is_terminal():
+            return
+        try:
+            # 从非终态回到 ROUTED 需要先重置（回退流程会自己推进状态）
+            sm.reset()
+            sm.start()
+            sm.transition(AgentState.NORMALIZED, {"step": "normalize_fallback"})
+            sm.transition(AgentState.CONTEXT_RESOLVED, {"step": "context_resolve_fallback"})
+            sm.transition(AgentState.ANALYZED, {
+                "step": "analyze_fallback",
+                "intent": query_spec.intent,
+                "complexity": query_spec.complexity,
+            })
+            sm.transition(AgentState.ROUTED, {
+                "step": "route_fallback",
+                "level": route_decision.level,
+                "channels": route_decision.channels,
+            })
+        except Exception:
+            logger.error("[Fallback] 状态机回退重置失败，继续执行回退流程")
+
+    def _run_graph_flow(
+        self,
+        request: QueryRequest,
+        request_id: str,
+        session: Any,
+        sm: StateMachine,
+        start_time: float,
+        query_spec: QuerySpec,
+        route_decision: Any,
+        rewritten: Any,
+        search_query: str,
+        trace_collector: Optional[TraceCollector] = None,
+        event_callback: Optional[EventCallback] = None,
+    ) -> QueryResponse:
+        """
+        LangGraph 图编排流程（阶段 3，_run_agent_flow 的等价替换）
+
+        复用同一套组件（V1 检索/EvidenceBuilder/Generator/3个LLM Agent）与
+        同一套业务硬约束，仅把编排逻辑换成 StateGraph（见 langgraph_graph 包）。
+        状态机保留为 trace 记录器，事件回调/trace 记录与原流程一致。
+
+        异常由 handle_query 捕获后回退 _run_agent_flow。
+        """
+        from agent_platform.orchestration.langgraph_graph import (
+            GraphRuntime,
+            build_graph,
+        )
+
+        # ── 初始化预算控制器（按 path_id 分配，与 _run_agent_flow 一致）──
+        path_id = getattr(route_decision, "path_id", "P2") or "P2"
+        budget_ctrl = self._budget_controller or BudgetController(path_id=path_id)
+        # 每次查询重置预算（避免跨查询累积）
+        if self._budget_controller is None:
+            budget_ctrl.allocate(path_id)
+        logger.info(f"[LangGraph] 预算初始化 path={path_id}, {budget_ctrl}")
+
+        context = AgentContext(
+            session_id=session.session_id,
+            query=request.query,
+            query_spec=query_spec,
+            route_decision=route_decision,
+            budget_controller=budget_ctrl,
+        )
+
+        runtime = GraphRuntime(
+            handler=self,
+            request=request,
+            request_id=request_id,
+            session=session,
+            sm=sm,
+            start_time=start_time,
+            query_spec=query_spec,
+            route_decision=route_decision,
+            rewritten=rewritten,
+            search_query=search_query,
+            trace_collector=trace_collector,
+            event_callback=event_callback,
+            retrieval_client=self._retrieval_client,
+            evidence_builder=self._evidence_builder,
+            generator=self._generator,
+            planner_agent=self._planner_agent,
+            evaluator_agent=self._evaluator_agent,
+            verifier_agent=self._verifier_agent,
+            redis=self._redis,
+            budget_controller=budget_ctrl,
+            query_spec_builder=self._query_spec_builder,
+        )
+
+        # 懒加载并缓存编译后的图（进程内仅付一次编译成本）
+        if getattr(self, "_langgraph_graph", None) is None:
+            self._langgraph_graph = build_graph()
+
+        final_state = self._langgraph_graph.invoke({
+            "runtime": runtime,
+            "context": context,
+        })
+        response = final_state.get("response")
+        if response is None:
+            raise RuntimeError(
+                f"LangGraph 流程未产出响应: error={final_state.get('error')}"
+            )
+        return response
 
     def _run_agent_flow(
         self,

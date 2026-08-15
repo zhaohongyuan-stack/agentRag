@@ -321,19 +321,30 @@ async def query_stream(
             callback.on_done({"error": str(e)})
 
     async def event_generator():
-        """生成 SSE 事件流"""
+        """生成 SSE 事件流
+
+        心跳机制：LLM 长生成/评估阶段可能超过 60s 无业务事件，
+        期间每 15s 发送一条 SSE 注释心跳，防止 nginx（proxy_read_timeout）
+        与浏览器因静默超时切断连接，前端表现为“卡死”。
+        """
         # 启动 handler 任务（不等待完成）
         handler_task = asyncio.create_task(_run_handler())
+        total_deadline = 600.0  # 单次请求总时长上限（复杂表格取数类问题可能较长）
+        elapsed = 0.0
 
         while True:
             try:
-                event = await asyncio.wait_for(queue.get(), timeout=120.0)
+                event = await asyncio.wait_for(queue.get(), timeout=15.0)
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                 if event["type"] == "done":
                     break
             except asyncio.TimeoutError:
-                yield f"data: {json.dumps({'type': 'error', 'data': {'message': '请求超时'}}, ensure_ascii=False)}\n\n"
-                break
+                elapsed += 15.0
+                if elapsed >= total_deadline:
+                    yield f"data: {json.dumps({'type': 'error', 'data': {'message': '请求处理超时，请简化问题后重试'}}, ensure_ascii=False)}\n\n"
+                    break
+                # SSE 注释行：浏览器 EventSource 忽略，但可重置 nginx/代理的读超时
+                yield ": heartbeat\n\n"
 
         # 等待 handler 完成（清理资源）
         await handler_task

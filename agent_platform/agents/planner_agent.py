@@ -12,7 +12,7 @@ Planner Agent - 规划Agent
 
 import json
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent_platform.runtime.llm_client import LLMClient, LLMMessage
 
@@ -132,9 +132,9 @@ class PlannerAgent(BaseAgent):
 
         return decision, structured
 
-    def run(self, context: AgentContext) -> AgentResult:
+    def run(self, context: AgentContext, thinking_callback: Optional[Callable[[str], None]] = None) -> AgentResult:
         """执行规划，将结果写入context"""
-        result = super().run(context)
+        result = super().run(context, thinking_callback=thinking_callback)
 
         # 将检索计划写入context
         context.retrieval_plan = result.data

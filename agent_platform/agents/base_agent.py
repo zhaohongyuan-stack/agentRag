@@ -11,9 +11,14 @@ Agent 基类 - BaseAgent
 
 import logging
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from agent_platform.runtime.llm_client import LLMClient, LLMMessage, get_llm_client
+from agent_platform.runtime.llm_client import (
+    LLMClient,
+    LLMMessage,
+    get_llm_client,
+    parse_json_text,
+)
 
 from .agent_context import AgentContext, AgentResult
 
@@ -49,12 +54,14 @@ class BaseAgent:
         self._temperature = temperature
         self._max_tokens = max_tokens
 
-    def run(self, context: AgentContext) -> AgentResult:
+    def run(self, context: AgentContext, thinking_callback: Optional[Callable[[str], None]] = None) -> AgentResult:
         """
         统一入口：构建提示词 -> 调用LLM -> 解析JSON -> 返回AgentResult
 
         Args:
             context: Agent间共享上下文
+            thinking_callback: 可选的流式回调；提供时优先以流式方式调用 LLM，
+                将 token 实时推送给前端（思考过程流式输出），失败自动回退非流式
 
         Returns:
             AgentResult统一结构化输出
@@ -67,12 +74,22 @@ class BaseAgent:
         # 1. 构建提示词
         messages = self._build_prompt(context)
 
-        # 2. 调用LLM（chat_json确保返回dict）
-        raw_response = self._llm.chat_json(
-            messages=messages,
-            temperature=self._temperature,
-            max_tokens=self._max_tokens,
-        )
+        # 2. 调用LLM（chat_json确保返回dict；有回调时先尝试流式）
+        raw_response = None
+        if thinking_callback is not None:
+            try:
+                raw_response = self._chat_json_stream(messages, thinking_callback)
+            except Exception as stream_err:
+                # mock/httpx 后端不支持流式或流中断 → 回退非流式
+                logger.warning(
+                    "[%s] 流式JSON调用失败，回退非流式: %s", self.name, stream_err
+                )
+        if raw_response is None:
+            raw_response = self._llm.chat_json(
+                messages=messages,
+                temperature=self._temperature,
+                max_tokens=max(self._max_tokens, 16384),
+            )
 
         latency_ms = _now_ms() - start_ms
 
@@ -93,6 +110,33 @@ class BaseAgent:
             latency_ms=latency_ms,
             success=True,
         )
+
+    def _chat_json_stream(
+        self,
+        messages: List[LLMMessage],
+        thinking_callback: Callable[[str], None],
+    ) -> Dict[str, Any]:
+        """流式调用 LLM 并收集 JSON 输出
+
+        token 边产生边通过 thinking_callback 推送（前端逐字可见），
+        全部收集完后用宽容解析器提取 JSON（容忍截断/围栏）。
+        注意：content token 同时转发给回调，Agent 的结构化输出过程对前端实时可见。
+        max_tokens 提到 16384：推理模型的思维链会占用完成预算，
+        预算过小会导致正文为空或 JSON 被截断（解析失败回退非流式）。
+        """
+        buf: List[str] = []
+        for kind, text in self._llm.chat_stream(
+            messages=messages,
+            temperature=self._temperature,
+            max_tokens=max(self._max_tokens, 16384),
+        ):
+            if kind == "token":
+                buf.append(text)
+                thinking_callback(text)
+            elif kind == "thinking":
+                # 推理模型的思维链字段，同样流式展示
+                thinking_callback(text)
+        return parse_json_text("".join(buf))
 
     # ============================================================
     # 子类必须实现的方法

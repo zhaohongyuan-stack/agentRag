@@ -39,7 +39,9 @@ RUN pip install --no-cache-dir \
     "xlrd>=2.0.1" \
     "pdfplumber>=0.10.0" \
     "pypdf>=3.17.0" \
-    "python-docx>=1.1.0"
+    "python-docx>=1.1.0" \
+    "langgraph>=0.2.0" \
+    "langchain-core>=0.3.0"
 
 # 复制项目代码
 COPY agent_platform/ ./agent_platform/

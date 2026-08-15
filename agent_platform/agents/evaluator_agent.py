@@ -14,7 +14,7 @@ Evaluator Agent - 评估Agent
 
 import json
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from agent_platform.runtime.llm_client import LLMClient, LLMMessage
 
@@ -107,9 +107,9 @@ class EvaluatorAgent(BaseAgent):
 
         return decision, structured
 
-    def run(self, context: AgentContext) -> AgentResult:
+    def run(self, context: AgentContext, thinking_callback: Optional[Callable[[str], None]] = None) -> AgentResult:
         """执行评估，将结果写入context"""
-        result = super().run(context)
+        result = super().run(context, thinking_callback=thinking_callback)
 
         # 将评估结果写入context
         context.evaluation_result = result.data

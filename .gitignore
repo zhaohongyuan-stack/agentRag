@@ -1,2 +1,14 @@
+# ── 数据与缓存（不入库） ──
+regulatory_docs/
+**/.cache/
+__pycache__/
 *.pyc
+*.pyo
+
+# ── 环境与 IDE ──
+.env
+.env.local
+.idea/
+.vscode/
 .DS_Store
+Thumbs.db

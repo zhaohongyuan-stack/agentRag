@@ -101,6 +101,7 @@ def search_as_tool(
     strategy: str = "hybrid",
     top_k: int = 10,
     filters: Optional[Dict[str, str]] = None,
+    target_industries: Optional[List[str]] = None,
     max_chars_per_hit: int = 500,
 ) -> List[ToolHit]:
     """
@@ -115,6 +116,7 @@ def search_as_tool(
         strategy: hybrid | bm25 | dense | exact | table | metadata
         top_k: 返回条数
         filters: 元数据过滤，如 {"chunk_type": "cell_fact"}
+        target_industries: 行业分区过滤，如 ["银行业"]
         max_chars_per_hit: 每条结果截断上限（LLM 用 300~800 合适）
 
     Returns:
@@ -127,6 +129,7 @@ def search_as_tool(
         filters=filters or {},
         max_chars_per_hit=max_chars_per_hit,
         include_evidence=True,
+        target_industries=target_industries,
     )
 
     hits: List[RetrievalHit] = api.search_request(req)
@@ -275,6 +278,17 @@ SEARCH_TOOL_SCHEMA = {
                     ),
                     "additionalProperties": {"type": "string"},
                 },
+                "target_industries": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["银行业", "保险业", "其他"]},
+                    "description": (
+                        "行业分区过滤（多分区模式生效）。\n"
+                        "- 不传: 自动从 filters 推断行业\n"
+                        '- ["银行业"]: 只搜银行业\n'
+                        '- ["银行业", "保险业"]: 搜两个分区\n'
+                        '- ["其他"]: 只搜其他分区'
+                    ),
+                },
             },
             "required": ["query"],
         },
@@ -327,6 +341,7 @@ def make_tool_spec(api: RetrievalAPI) -> ToolSpec:
         strategy: str = "hybrid",
         top_k: int = 10,
         filters: Optional[Dict[str, str]] = None,
+        target_industries: Optional[List[str]] = None,
         **kwargs,  # 忽略 LLM 可能多传的参数
     ) -> str:
         hits = search_as_tool(
@@ -335,6 +350,7 @@ def make_tool_spec(api: RetrievalAPI) -> ToolSpec:
             strategy=strategy,
             top_k=top_k,
             filters=filters,
+            target_industries=target_industries,
         )
         return to_llm_text(hits)
 
@@ -432,6 +448,7 @@ class Retriever:
                bm25_k: int = 20,
                vector_k: int = 20,
                expand_context: bool = False,
+               target_industries: Optional[List[str]] = None,
                lightweight: bool = True,
                ) -> List[Dict[str, Any]]:
         """
@@ -446,6 +463,7 @@ class Retriever:
             bm25_k:   hybrid 时 BM25 粗排候选数
             vector_k: hybrid 时向量粗排候选数
             expand_context: 是否扩展邻域上下文
+            target_industries: 行业分区过滤，如 ["银行业"]
             lightweight: True=只返回关键字段，False=返回全部字段
 
         返回:
@@ -471,6 +489,7 @@ class Retriever:
             vector_k=vector_k,
             exact_mode=exact_mode,
             expand_context=expand_context,
+            target_industries=target_industries,
         )
         hits = self._api.search_request(req)
 

@@ -169,19 +169,32 @@ class RetrievalAPI:
         print("=" * 60)
 
         # ── 计算数据指纹（用于判断缓存是否有效）──
-        # 优先用 JSONL 文件指纹（能检测数据更新）；
-        # JSONL 不存在时回退到 DB 指纹（chunk 数量 + DB 文件修改时间），从已有 manifest 恢复。
-        jsonl_files = sorted(
-            list(source_path.glob("*.jsonl")) if source_path.is_dir()
-            else ([source_path] if source_path.exists() else [])
-        )
+        # 优先用 chunk 文件指纹（能检测数据更新）；
+        # 递归扫描 *_chunks.jsonl / *_chunks.json（与 load_json_chunks 一致），
+        # 排除隐藏目录（如 .cache），避免把缓存自身算进指纹导致循环失效。
+        # 文件不存在时回退到 DB 指纹（chunk 数量 + DB 文件修改时间），从已有 manifest 恢复。
+        if source_path.is_dir():
+            jsonl_files = sorted(
+                [p for p in source_path.rglob("*_chunks.jsonl")
+                 if not any(part.startswith(".") for part in p.parts)]
+                + [p for p in source_path.rglob("*_chunks.json")
+                   if not any(part.startswith(".") for part in p.parts)]
+            )
+        elif source_path.exists():
+            jsonl_files = [source_path]
+        else:
+            jsonl_files = []
 
         if jsonl_files:
-            # 有 JSONL 文件：用文件级指纹（文件名 + 大小 + 修改时间）
-            file_sig = "|".join(f"{f.name}:{f.stat().st_size}:{int(f.stat().st_mtime)}" for f in jsonl_files)
+            # 有 chunk 文件：用文件级指纹（相对路径 + 大小 + 修改时间）
+            # 用相对路径区分不同子目录下的同名文件（如多个目录都有 012_chunks.jsonl）
+            file_sig = "|".join(
+                f"{f.relative_to(source_path).as_posix()}:{f.stat().st_size}:{int(f.stat().st_mtime)}"
+                for f in jsonl_files
+            )
             data_hash = hashlib.sha256(file_sig.encode()).hexdigest()[:16]
             manifest_path = cache_dir / f"manifest_{data_hash}.json"
-            print(f"  [数据指纹] 基于 {len(jsonl_files)} 个 JSONL 文件: {data_hash}")
+            print(f"  [数据指纹] 基于 {len(jsonl_files)} 个 chunk 文件: {data_hash}")
         else:
             # 无 JSONL 文件：从 .cache 中已有的 manifest 恢复（基于 DB 内容）
             data_hash = None
@@ -201,6 +214,7 @@ class RetrievalAPI:
             print(f"\n  [缓存命中] data_hash={data_hash}")
             if self._load_from_cache(cache_dir, data_hash, populate_db, lightweight):
                 self._loaded = True
+                self.warmup()  # 预热 Dense 模型，避免首次查询 30s 冷启动
                 doc_count = len(set(m.doc_id for m in self._store._meta_map.values()))
                 print(f"\n  Retrieval API v1 就绪（缓存启动）— "
                       f"{doc_count} 文档, "
@@ -222,7 +236,7 @@ class RetrievalAPI:
         if not chunks:
             print("[警告] 未找到任何 chunk")
             if not jsonl_files:
-                print("  原因：数据目录下无 JSONL 文件，且无可用缓存。")
+                print("  原因：数据目录下无 chunk 文件，且无可用缓存。")
                 print("  解决：将 *_chunks.jsonl 文件放入数据目录后重启服务。")
                 print(f"  数据目录: {source_path}")
             return self
@@ -314,6 +328,7 @@ class RetrievalAPI:
         del doc_texts
 
         self._loaded = True
+        self.warmup()  # 预热 Dense 模型（全量路径已加载过，此处为 no-op）
         doc_count = len(set(m.doc_id for m in self._store._meta_map.values()))
         print(f"\n  Retrieval API v1 就绪（全量构建）— "
               f"{doc_count} 文档, "
@@ -321,6 +336,16 @@ class RetrievalAPI:
               f"{len(self.table.list_tables())} 表格")
         print("=" * 60 + "\n")
         return self
+
+    def warmup(self) -> None:
+        """预热 Dense 嵌入模型（把首次查询的 30s 模型加载提前到启动阶段）
+
+        缓存启动时只加载了向量矩阵，模型本体是懒加载的；
+        这里在启动阶段触发 _load_model()，让第一次查询秒回。
+        全量构建路径已通过 dense.index() 加载过模型，此处为 no-op。
+        """
+        if self.dense is not None:
+            self.dense._load_model()
 
     def _save_all_indexes(self, cache_dir: Path, data_hash: str, text_hash: str) -> None:
         """将全部索引持久化到缓存目录"""

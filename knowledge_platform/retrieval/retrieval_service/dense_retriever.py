@@ -220,6 +220,22 @@ class DenseRetriever:
         e = Path(embeddings_path)
         if not p.exists() or not e.exists():
             return False
+
+        # ── 模块路径兼容 ──
+        # pickle 中 ChunkMeta 的 __module__ 可能是以下任一路径：
+        #   retrieval_service.chunk_store          （从 knowledge_platform/retrieval/ 启动时）
+        #   knowledge_platform.retrieval.retrieval_service.chunk_store  （从项目根启动时）
+        # 此处注册别名，确保两种路径都能正确反序列化
+        import sys as _sys
+        _current_mod = _sys.modules.get(__name__)
+        if _current_mod:
+            for alias in (
+                "retrieval_service.dense_retriever",
+                "knowledge_platform.retrieval.retrieval_service.dense_retriever",
+            ):
+                if alias not in _sys.modules:
+                    _sys.modules[alias] = _current_mod
+
         with open(p, "rb") as f:
             data = pickle.load(f)
 

@@ -100,6 +100,16 @@ class RetrievalRequest:
       {"chunk_type": "clause", "doc_id": "400", "applicable_scope": "全部"}
     """
 
+    # ── 行业分区 ──
+    target_industries: Optional[List[str]] = None
+    """
+    指定检索的行业分区（多分区模式时生效）。
+    None: 从 filters 自动推断，无法推断时搜全部
+    ["银行业"]: 只搜银行业
+    ["银行业", "保险业"]: 搜两个分区
+    可选值: "银行业" | "保险业" | "其他"
+    """
+
     # ── 精确检索参数（strategy=exact 时生效）──
     exact_mode: str = "contains"
     """精确匹配模式: 'contains' | 'exact' | 'regex' | 'prefix'"""
